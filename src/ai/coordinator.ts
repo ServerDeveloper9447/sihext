@@ -3,19 +3,17 @@ import {
   ExtractedDOMSummary,
   AgentMessage,
   RedactionReport,
-} from '../../types';
-import { AIRouter, RoutingDecision } from '../router';
-import { OnDeviceViTEngine } from '../ondevice/vit-engine';
-import { GeminiClient, CloudAIResponse } from './gemini';
-import { OpenAIClient } from './openai';
-import { AnthropicClient } from './anthropic';
-import { CanvasRedactor, RedactionRegion } from '../../privacy/canvas-redactor';
+} from '../types';
+import { AIRouter, RoutingDecision } from './router';
+import { OnDeviceViTEngine } from './ondevice/vit-engine';
+import { CustomBackendClient } from './backend/custom-backend-client';
+import { CanvasRedactor, RedactionRegion } from '../privacy/canvas-redactor';
 
 export class AgentCoordinator {
   private vitEngine = new OnDeviceViTEngine();
 
   /**
-   * Orchestrates query execution across router, privacy filters, on-device ViT, and cloud providers.
+   * Orchestrates query execution across router, privacy filters, on-device ViT, and custom backend.
    */
   public async executeAgentTurn(
     prompt: string,
@@ -23,7 +21,7 @@ export class AgentCoordinator {
     settings: ExtensionSettings,
     rawScreenshotUrl?: string
   ): Promise<{ message: AgentMessage; routing: RoutingDecision }> {
-    // 1. Decide route (On-device vs Cloud)
+    // 1. Decide route (On-device ViT vs Custom Backend)
     const routing = AIRouter.decideRoute(prompt, domSummary, settings);
 
     let answer = '';
@@ -44,14 +42,14 @@ export class AgentCoordinator {
     };
 
     if (routing.target === 'on-device') {
-      // Execute with local on-device ViT engine
+      // Execute with local on-device ViT engine (zero outbound traffic)
       const localRes = await this.vitEngine.processLocal(prompt, domSummary);
       answer = localRes.answer;
       actions = localRes.actions;
       modelUsed = localRes.modelUsed;
       isLocalExecution = true;
     } else {
-      // 2. Prepare Cloud Request with Privacy Redaction
+      // 2. Prepare Custom Backend Request with Privacy Redaction
       if (rawScreenshotUrl && settings.privacy.enabled) {
         // Collect sensitive regions for image redaction
         const sensitiveRegions: RedactionRegion[] = domSummary.elements
@@ -62,7 +60,7 @@ export class AgentCoordinator {
             type: 'password',
           }));
 
-        // Redact screenshot before transmission
+        // Redact screenshot before sending to backend
         redactedScreenshot = await CanvasRedactor.redactScreenshot(
           rawScreenshotUrl,
           sensitiveRegions
@@ -71,44 +69,17 @@ export class AgentCoordinator {
         redactedScreenshot = rawScreenshotUrl;
       }
 
-      // 3. Dispatch to selected cloud provider
-      let cloudRes: CloudAIResponse;
+      // 3. Dispatch to our own model backend
+      const backendClient = new CustomBackendClient(settings.backend);
+      const backendRes = await backendClient.generateAgentResponse(
+        prompt,
+        domSummary,
+        redactedScreenshot
+      );
 
-      switch (settings.selectedProvider) {
-        case 'gemini': {
-          const client = new GeminiClient(settings.providers.geminiApiKey || '', settings.cloudModel);
-          cloudRes = await client.generateAgentResponse(prompt, domSummary, redactedScreenshot);
-          break;
-        }
-
-        case 'openai': {
-          const client = new OpenAIClient(
-            settings.providers.openaiApiKey || '',
-            settings.cloudModel || 'gpt-4o-mini',
-            settings.providers.customEndpoint
-          );
-          cloudRes = await client.generateAgentResponse(prompt, domSummary, redactedScreenshot);
-          break;
-        }
-
-        case 'anthropic': {
-          const client = new AnthropicClient(
-            settings.providers.anthropicApiKey || '',
-            settings.cloudModel || 'claude-3-5-sonnet-20241022'
-          );
-          cloudRes = await client.generateAgentResponse(prompt, domSummary, redactedScreenshot);
-          break;
-        }
-
-        default: {
-          const client = new GeminiClient(settings.providers.geminiApiKey || '', 'gemini-1.5-flash');
-          cloudRes = await client.generateAgentResponse(prompt, domSummary, redactedScreenshot);
-        }
-      }
-
-      answer = cloudRes.answer;
-      actions = cloudRes.actions;
-      modelUsed = cloudRes.modelUsed;
+      answer = backendRes.answer;
+      actions = backendRes.actions;
+      modelUsed = backendRes.modelUsed;
       isLocalExecution = false;
     }
 

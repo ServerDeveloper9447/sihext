@@ -76,6 +76,13 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
 
     case 'CLEAR_HIGHLIGHT': {
       highlighter.clear();
+      extractor?.cleanupOverlays();
+      return { success: true };
+    }
+
+    case 'CLEANUP_OVERLAYS': {
+      highlighter.clear();
+      extractor?.cleanupOverlays();
       return { success: true };
     }
 

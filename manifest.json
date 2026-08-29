@@ -1,18 +1,15 @@
 {
   "manifest_version": 3,
   "name": "AetherDOM AI - Hybrid Vision & DOM Agent",
-  "version": "0.1.0",
-  "description": "Privacy-first hybrid AI Chrome extension using on-device ViT & cloud models with automated sensitive data redaction and DOM automation.",
+  "version": "1.0.0",
+  "description": "Privacy-first hybrid AI Chrome extension with Set-of-Mark annotation, on-device ViT, custom model backend, and automated PII redaction.",
   "permissions": [
     "activeTab",
-    "storage",
-    "sidePanel",
     "scripting",
     "offscreen",
+    "storage",
+    "sidePanel",
     "tabs"
-  ],
-  "host_permissions": [
-    "<all_urls>"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -55,7 +52,7 @@
         "default": "Ctrl+Shift+E",
         "mac": "Command+Shift+E"
       },
-      "description": "Toggle AI Assistant Side Panel"
+      "description": "Toggle AetherDOM AI Side Panel"
     }
   }
 }

@@ -1,7 +1,7 @@
 import { ExtensionSettings, ExtractedDOMSummary, RoutingMode, AIProvider } from '../types';
 
 export interface RoutingDecision {
-  target: 'on-device' | 'cloud';
+  target: 'on-device' | 'backend';
   provider: AIProvider;
   reason: string;
   confidence: number;
@@ -16,15 +16,15 @@ export class AIRouter {
     domSummary: ExtractedDOMSummary,
     settings: ExtensionSettings
   ): RoutingDecision {
-    const mode: RoutingMode = settings.routingMode;
+    const mode: RoutingMode = settings.routingMode || 'auto';
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-    // 1. If offline, must use on-device
+    // 1. If offline, must use on-device ViT
     if (!isOnline) {
       return {
         target: 'on-device',
         provider: 'local-vit',
-        reason: 'Device is offline; routing to local on-device ViT engine.',
+        reason: 'Device is offline; running purely in-browser on-device ViT engine.',
         confidence: 1.0,
       };
     }
@@ -34,16 +34,16 @@ export class AIRouter {
       return {
         target: 'on-device',
         provider: 'local-vit',
-        reason: 'User policy: Strict on-device execution only.',
+        reason: 'Policy: Strict On-Device execution only (zero outbound network requests).',
         confidence: 1.0,
       };
     }
 
-    if (mode === 'cloud-only') {
+    if (mode === 'backend-only') {
       return {
-        target: 'cloud',
-        provider: settings.selectedProvider,
-        reason: 'User policy: Cloud provider execution only.',
+        target: 'backend',
+        provider: 'custom-backend',
+        reason: 'Policy: Route directly to custom self-hosted model backend.',
         confidence: 1.0,
       };
     }
@@ -52,16 +52,16 @@ export class AIRouter {
       return {
         target: 'on-device',
         provider: 'local-vit',
-        reason: 'User preference: On-device preferred.',
+        reason: 'Preference: On-Device ViT preferred.',
         confidence: 0.85,
       };
     }
 
-    if (mode === 'cloud-preferred') {
+    if (mode === 'backend-preferred') {
       return {
-        target: 'cloud',
-        provider: settings.selectedProvider,
-        reason: 'User preference: Cloud model preferred.',
+        target: 'backend',
+        provider: 'custom-backend',
+        reason: 'Preference: Custom model backend preferred.',
         confidence: 0.85,
       };
     }
@@ -69,7 +69,6 @@ export class AIRouter {
     // 3. Auto Mode: Intelligent decision based on privacy and complexity
     // If sensitive data density is high, prioritize local processing for maximum privacy
     if (domSummary.sensitiveElementsCount > 0 && settings.privacy.enabled) {
-      // Sensitive fields detected on the page (e.g. login / checkout form)
       return {
         target: 'on-device',
         provider: 'local-vit',
@@ -78,22 +77,22 @@ export class AIRouter {
       };
     }
 
-    // Simple queries (e.g. "click login", "find search bar", "scroll down") can be answered instantaneously on-device
+    // Simple navigation actions (clicks, simple inputs, scrolls) are handled instantaneously on-device
     const isSimpleNavigation = /^(click|scroll|find|type|select|focus|go to|open)\b/i.test(query.trim());
     if (isSimpleNavigation && domSummary.interactiveCount < 60) {
       return {
         target: 'on-device',
         provider: 'local-vit',
-        reason: 'Task is a lightweight DOM navigation action suitable for instant on-device ViT execution.',
+        reason: 'Task is a lightweight DOM action suitable for instant on-device ViT execution.',
         confidence: 0.8,
       };
     }
 
-    // Complex reasoning, deep summarization, or large DOM trees route to Cloud
+    // Complex reasoning, visual page analysis, or deep questions route to our custom backend server
     return {
-      target: 'cloud',
-      provider: settings.selectedProvider,
-      reason: 'Complex task or open-ended reasoning; routing to high-capacity Cloud model.',
+      target: 'backend',
+      provider: 'custom-backend',
+      reason: 'Complex task or multi-step reasoning; routing to custom self-hosted model backend.',
       confidence: 0.88,
     };
   }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Shield,
-  Key,
+  Server,
   Cpu,
   Save,
   Check,
@@ -10,18 +10,26 @@ import {
   Plus,
   Trash2,
   Sliders,
+  Activity,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Toggle } from '../components/Toggle';
-import { ExtensionSettings, RoutingMode, AIProvider } from '../types';
+import { ExtensionSettings, RoutingMode } from '../types';
 import { DEFAULT_SETTINGS, getStoredSettings, saveStoredSettings } from '../utils/storage';
+import { CustomBackendClient } from '../ai/backend/custom-backend-client';
 
 export const Options: React.FC = () => {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
-  const [activeTab, setActiveTab] = useState<'providers' | 'privacy' | 'routing' | 'safety'>('providers');
+  const [activeTab, setActiveTab] = useState<'backend' | 'privacy' | 'routing' | 'safety'>('backend');
   const [isSaved, setIsSaved] = useState(false);
   const [customRegexInput, setCustomRegexInput] = useState('');
+  
+  // Connection Test State
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; latencyMs?: number } | null>(null);
 
   useEffect(() => {
     getStoredSettings().then(setSettings);
@@ -31,6 +39,21 @@ export const Options: React.FC = () => {
     await saveStoredSettings(settings);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2500);
+  };
+
+  const handleTestBackend = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const client = new CustomBackendClient(settings.backend);
+      const res = await client.testConnection();
+      setTestResult(res);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTestResult({ ok: false, message: `Ping failed: ${msg}` });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const handleAddRegexRule = () => {
@@ -71,7 +94,7 @@ export const Options: React.FC = () => {
           <div>
             <h1 className="text-xl font-bold text-white">AetherDOM AI Settings</h1>
             <p className="text-xs text-slate-400">
-              Configure AI models, On-Device ViT, and Privacy Redaction rules
+              Custom Self-Hosted Model Backend & Privacy Redaction Configuration
             </p>
           </div>
         </div>
@@ -90,14 +113,14 @@ export const Options: React.FC = () => {
       {/* Tabs Navigation */}
       <div className="flex gap-2 pt-6 pb-6 border-b border-slate-800/80">
         <button
-          onClick={() => setActiveTab('providers')}
+          onClick={() => setActiveTab('backend')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            activeTab === 'providers'
+            activeTab === 'backend'
               ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
-          <Key className="w-4 h-4" /> Cloud & Local Providers
+          <Server className="w-4 h-4" /> Self-Hosted Model Backend
         </button>
 
         <button
@@ -136,111 +159,123 @@ export const Options: React.FC = () => {
 
       {/* Tab Content */}
       <div className="py-6 space-y-6">
-        {/* TAB 1: PROVIDERS */}
-        {activeTab === 'providers' && (
+        {/* TAB 1: SELF-HOSTED MODEL BACKEND */}
+        {activeTab === 'backend' && (
           <div className="space-y-6">
             <Card className="space-y-4">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <Key className="w-4 h-4 text-indigo-400" /> Default AI Provider
-              </h2>
-
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { id: 'gemini', name: 'Google Gemini', desc: 'Multimodal Vision & DOM' },
-                  { id: 'openai', name: 'OpenAI GPT-4o', desc: 'Fast JSON reasoning' },
-                  { id: 'anthropic', name: 'Claude 3.5 Sonnet', desc: 'Deep DOM comprehension' },
-                ].map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        selectedProvider: p.id as AIProvider,
-                      }))
-                    }
-                    className={`p-3.5 rounded-xl border text-left transition-all ${
-                      settings.selectedProvider === p.id
-                        ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10'
-                        : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="font-semibold text-sm block text-white">{p.name}</span>
-                    <span className="text-xs text-slate-400">{p.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="space-y-4">
-              <h2 className="text-base font-semibold text-white">API Keys & Endpoints</h2>
-
-              {/* Gemini Key */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">Google Gemini API Key</label>
-                <input
-                  type="password"
-                  value={settings.providers.geminiApiKey || ''}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      providers: { ...prev.providers, geminiApiKey: e.target.value },
-                    }))
-                  }
-                  placeholder="AIzaSy..."
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                />
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div>
+                  <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                    <Server className="w-4 h-4 text-indigo-400" /> Model Server Endpoint
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Connects directly to your own self-hosted vision/LLM agent backend. Zero corporate cloud APIs.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestBackend}
+                  isLoading={isTesting}
+                  leftIcon={<Activity className="w-3.5 h-3.5" />}
+                >
+                  Test Connection
+                </Button>
               </div>
 
-              {/* OpenAI Key */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">OpenAI API Key</label>
-                <input
-                  type="password"
-                  value={settings.providers.openaiApiKey || ''}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      providers: { ...prev.providers, openaiApiKey: e.target.value },
-                    }))
-                  }
-                  placeholder="sk-..."
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+              {testResult && (
+                <div
+                  className={`p-3 rounded-lg flex items-center gap-2 text-xs border ${
+                    testResult.ok
+                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                      : 'bg-rose-950/30 border-rose-500/40 text-rose-300'
+                  }`}
+                >
+                  {testResult.ok ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  )}
+                  <span>{testResult.message}</span>
+                </div>
+              )}
 
-              {/* Anthropic Key */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">Anthropic API Key</label>
-                <input
-                  type="password"
-                  value={settings.providers.anthropicApiKey || ''}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      providers: { ...prev.providers, anthropicApiKey: e.target.value },
-                    }))
-                  }
-                  placeholder="sk-ant-..."
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              {/* Local Ollama / Custom Base URL */}
+              {/* Endpoint URL */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300">
-                  Custom OpenAI-Compatible Endpoint (e.g. Ollama, vLLM, LM Studio)
+                  Backend API Endpoint URL <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="text"
-                  value={settings.providers.customEndpoint || ''}
+                  value={settings.backend?.endpointUrl || ''}
                   onChange={(e) =>
                     setSettings((prev) => ({
                       ...prev,
-                      providers: { ...prev.providers, customEndpoint: e.target.value },
+                      backend: { ...prev.backend, endpointUrl: e.target.value },
                     }))
                   }
-                  placeholder="http://localhost:11434/v1"
+                  placeholder="http://localhost:8000/api/v1/agent"
                   className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                />
+                <p className="text-[11px] text-slate-400">
+                  The HTTP(S) URL of your model backend service (supports JSON DOM action requests).
+                </p>
+              </div>
+
+              {/* Model Identifier */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Model Name / Identifier</label>
+                <input
+                  type="text"
+                  value={settings.backend?.modelName || ''}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      backend: { ...prev.backend, modelName: e.target.value },
+                    }))
+                  }
+                  placeholder="custom-dom-agent-v1"
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* API Token / Secret */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">
+                  Authorization Bearer Token / Secret <span className="text-slate-500">(Optional)</span>
+                </label>
+                <input
+                  type="password"
+                  value={settings.backend?.apiKey || ''}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      backend: { ...prev.backend, apiKey: e.target.value },
+                    }))
+                  }
+                  placeholder="Bearer your-custom-secret-key"
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Timeout */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Request Timeout (seconds)</label>
+                <input
+                  type="number"
+                  min="5"
+                  max="180"
+                  value={Math.round((settings.backend?.timeoutMs || 30000) / 1000)}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      backend: {
+                        ...prev.backend,
+                        timeoutMs: Math.max(5, parseInt(e.target.value) || 30) * 1000,
+                      },
+                    }))
+                  }
+                  className="w-32 px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </Card>
@@ -254,10 +289,10 @@ export const Options: React.FC = () => {
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <div>
                   <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-emerald-400" /> Master Privacy Redactor
+                    <Shield className="w-4 h-4 text-emerald-400" /> Pre-Flight Privacy Redactor
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Automatically scrubs confidential elements and visual areas before passing to cloud models.
+                    Automatically scrubs confidential elements and visual areas before passing data to the backend.
                   </p>
                 </div>
                 <Toggle
@@ -340,7 +375,7 @@ export const Options: React.FC = () => {
                 <Lock className="w-4 h-4 text-indigo-400" /> Custom Regex Redaction Blacklist
               </h2>
               <p className="text-xs text-slate-400">
-                Add custom regex patterns to automatically scrub proprietary data (e.g. employee IDs, internal codes).
+                Add custom regex patterns to automatically scrub proprietary data (e.g. employee IDs, internal tokens).
               </p>
 
               <div className="flex gap-2">
@@ -386,7 +421,7 @@ export const Options: React.FC = () => {
                 <Cpu className="w-4 h-4 text-indigo-400" /> Hybrid AI Routing Strategy
               </h2>
               <p className="text-xs text-slate-400">
-                Choose how requests are balanced between local on-device ViT and high-capacity cloud models.
+                Choose how requests are balanced between local on-device ViT and your self-hosted model backend.
               </p>
 
               <div className="space-y-3">
@@ -394,27 +429,27 @@ export const Options: React.FC = () => {
                   {
                     mode: 'auto',
                     title: 'Auto Balanced (Recommended)',
-                    desc: 'Uses on-device ViT for sensitive forms and fast DOM navigation; routes complex multi-step reasoning to cloud.',
+                    desc: 'Uses on-device ViT for sensitive forms and fast DOM actions; routes multi-step reasoning to your custom backend.',
                   },
                   {
                     mode: 'on-device-preferred',
                     title: 'On-Device Preferred',
-                    desc: 'Prefers on-device ViT / WebGPU; falls back to cloud only when on-device confidence is insufficient.',
+                    desc: 'Prefers on-device ViT / WebGPU; falls back to custom backend only when on-device confidence is low.',
                   },
                   {
                     mode: 'on-device-only',
-                    title: 'On-Device Strict (Zero-Cloud Privacy)',
-                    desc: 'Never transmits any page content or screenshots over the internet. Runs 100% locally.',
+                    title: 'On-Device Strict (100% In-Browser)',
+                    desc: 'Never sends any data to the backend. Runs purely in-browser.',
                   },
                   {
-                    mode: 'cloud-preferred',
-                    title: 'Cloud Preferred',
-                    desc: 'Prefers cloud models for highest reasoning accuracy with automated pre-flight PII redaction.',
+                    mode: 'backend-preferred',
+                    title: 'Backend Preferred',
+                    desc: 'Prefers your self-hosted model backend with pre-flight PII redaction.',
                   },
                   {
-                    mode: 'cloud-only',
-                    title: 'Cloud Only',
-                    desc: 'Routes all requests directly to the cloud provider.',
+                    mode: 'backend-only',
+                    title: 'Backend Only',
+                    desc: 'Routes all requests directly to your custom model backend.',
                   },
                 ].map((item) => (
                   <label

@@ -183,7 +183,7 @@ export const Popup: React.FC = () => {
             </span>
           </div>
           <Badge variant="brand" size="sm">
-            {(settings?.selectedProvider || 'gemini').toUpperCase()}
+            {settings?.selectedProvider === 'local-vit' ? 'ON-DEVICE' : 'CUSTOM BACKEND'}
           </Badge>
         </div>
       </div>

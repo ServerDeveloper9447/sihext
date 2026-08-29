@@ -1,21 +1,56 @@
-/* Content script styles for element highlighters and privacy overlays */
+/* Content script styles for element highlighters, Set-of-Mark overlays, and privacy badges */
+#som-overlay-container,
 .sihext-overlay-container {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
-  z-index: 2147483647;
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
 }
 
+/* Set-of-Mark (SoM) bounding box overlay */
+.som-mark-overlay,
 .sihext-highlight-box {
   position: absolute;
-  border-radius: 4px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
+  pointer-events: none !important;
+  border-radius: 4px !important;
+  transition: all 0.15s ease-in-out;
 }
 
+.som-mark-overlay {
+  background-color: rgba(99, 102, 241, 0.16) !important;
+  border: 2px solid #6366f1 !important;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.45) !important;
+}
+
+/* Set-of-Mark high-contrast integer ID badge */
+.som-mark-badge {
+  position: absolute;
+  top: -10px;
+  left: -2px;
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  padding: 3px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid #c7d2fe !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  letter-spacing: 0.03em !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Action Highlight Variant */
 .sihext-highlight-action {
   border: 2px solid #6366f1;
   background-color: rgba(99, 102, 241, 0.15);
@@ -23,12 +58,14 @@
   animation: sihext-pulse 1.8s infinite;
 }
 
+/* Inspect Highlight Variant */
 .sihext-highlight-inspect {
   border: 2px solid #06b6d4;
   background-color: rgba(6, 182, 212, 0.15);
   box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
 }
 
+/* Sensitive Highlight Variant */
 .sihext-highlight-sensitive {
   border: 2px solid #f43f5e;
   background-color: rgba(244, 63, 94, 0.2);

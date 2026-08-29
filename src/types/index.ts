@@ -1,11 +1,11 @@
 export type RoutingMode = 
   | 'auto' 
   | 'on-device-preferred' 
-  | 'cloud-preferred' 
+  | 'backend-preferred' 
   | 'on-device-only' 
-  | 'cloud-only';
+  | 'backend-only';
 
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'local-vit';
+export type AIProvider = 'custom-backend' | 'local-vit';
 
 export interface BoundingBox {
   x: number;
@@ -61,20 +61,20 @@ export interface PrivacySettings {
   customRegexRules: string[];
 }
 
-export interface ProviderKeys {
-  geminiApiKey?: string;
-  openaiApiKey?: string;
-  anthropicApiKey?: string;
-  customEndpoint?: string;
+export interface CustomBackendConfig {
+  endpointUrl: string;
+  apiKey?: string;
+  modelName: string;
+  timeoutMs?: number;
+  customHeaders?: Record<string, string>;
 }
 
 export interface ExtensionSettings {
   routingMode: RoutingMode;
   selectedProvider: AIProvider;
-  cloudModel: string;
+  backend: CustomBackendConfig;
   onDeviceModel: string;
   privacy: PrivacySettings;
-  providers: ProviderKeys;
   autoConfirmSafeActions: boolean;
   actionExecutionDelayMs: number;
   theme: 'dark' | 'light' | 'system';
@@ -138,6 +138,7 @@ export type MessageType =
   | 'EXECUTE_ACTION'
   | 'HIGHLIGHT_ELEMENT'
   | 'CLEAR_HIGHLIGHT'
+  | 'CLEANUP_OVERLAYS'
   | 'CAPTURE_TAB'
   | 'REDACT_IMAGE'
   | 'PROCESS_QUERY'

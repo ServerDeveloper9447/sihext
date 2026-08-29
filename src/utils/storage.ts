@@ -2,9 +2,14 @@ import { ExtensionSettings, AgentMessage } from '../types';
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   routingMode: 'auto',
-  selectedProvider: 'gemini',
-  cloudModel: 'gemini-1.5-flash',
+  selectedProvider: 'custom-backend',
   onDeviceModel: 'vit-base-webgpu',
+  backend: {
+    endpointUrl: 'http://localhost:8000/api/v1/agent',
+    apiKey: '',
+    modelName: 'custom-dom-agent-v1',
+    timeoutMs: 30000,
+  },
   privacy: {
     enabled: true,
     maskPasswords: true,
@@ -14,12 +19,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     maskFaces: true,
     maskApiKeys: true,
     customRegexRules: [],
-  },
-  providers: {
-    geminiApiKey: '',
-    openaiApiKey: '',
-    anthropicApiKey: '',
-    customEndpoint: 'http://localhost:11434/v1',
   },
   autoConfirmSafeActions: true,
   actionExecutionDelayMs: 350,
@@ -42,16 +41,17 @@ export async function getStoredSettings(): Promise<ExtensionSettings> {
       if (chrome.runtime.lastError || !result[STORAGE_KEYS.SETTINGS]) {
         resolve(DEFAULT_SETTINGS);
       } else {
+        const stored = result[STORAGE_KEYS.SETTINGS];
         resolve({
           ...DEFAULT_SETTINGS,
-          ...result[STORAGE_KEYS.SETTINGS],
+          ...stored,
+          backend: {
+            ...DEFAULT_SETTINGS.backend,
+            ...(stored.backend || {}),
+          },
           privacy: {
             ...DEFAULT_SETTINGS.privacy,
-            ...(result[STORAGE_KEYS.SETTINGS].privacy || {}),
-          },
-          providers: {
-            ...DEFAULT_SETTINGS.providers,
-            ...(result[STORAGE_KEYS.SETTINGS].providers || {}),
+            ...(stored.privacy || {}),
           },
         });
       }

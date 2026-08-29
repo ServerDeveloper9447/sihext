@@ -4,6 +4,7 @@ import { DOMSanitizer } from '../privacy/dom-sanitizer';
 export class DOMExtractor {
   private sanitizer: DOMSanitizer;
   private refCounter = 0;
+  private overlayContainer: HTMLDivElement | null = null;
 
   constructor(privacySettings: PrivacySettings) {
     this.sanitizer = new DOMSanitizer(privacySettings);
@@ -13,11 +14,28 @@ export class DOMExtractor {
     this.sanitizer.updateSettings(settings);
   }
 
+  public cleanupOverlays() {
+    if (this.overlayContainer) {
+      this.overlayContainer.remove();
+      this.overlayContainer = null;
+    }
+    const existing = document.getElementById('som-overlay-container');
+    if (existing) existing.remove();
+  }
+
   /**
-   * Scans current webpage DOM, extracts interactive elements, assigns ref IDs, and sanitizes sensitive data.
+   * Scans current webpage DOM, extracts interactive elements, assigns integer/ref IDs,
+   * injects Set-of-Mark overlays, and sanitizes sensitive data.
    */
   public extractDOM(): ExtractedDOMSummary {
+    this.cleanupOverlays();
     this.refCounter = 0;
+
+    // Create root Set-of-Mark overlay container
+    this.overlayContainer = document.createElement('div');
+    this.overlayContainer.id = 'som-overlay-container';
+    document.documentElement.appendChild(this.overlayContainer);
+
     const elements: InteractiveDOMNode[] = [];
     let sensitiveElementsCount = 0;
 
@@ -43,6 +61,8 @@ export class DOMExtractor {
     ].join(',');
 
     const candidateElements = Array.from(document.querySelectorAll(targetSelector));
+    const scrollX = window.scrollX || window.pageXOffset || 0;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
 
     for (const el of candidateElements) {
       if (!this.isElementVisible(el)) {
@@ -50,8 +70,10 @@ export class DOMExtractor {
       }
 
       this.refCounter++;
-      const refId = `sihext-${this.refCounter}`;
+      const currentId = this.refCounter;
+      const refId = `sihext-${currentId}`;
       el.setAttribute('data-sihext-ref', refId);
+      el.setAttribute('data-som-id', String(currentId));
 
       const rect = el.getBoundingClientRect();
       const tagName = el.tagName.toLowerCase();
@@ -61,6 +83,23 @@ export class DOMExtractor {
 
       if (isSensitive) {
         sensitiveElementsCount++;
+      }
+
+      // Inject Set-of-Mark visual overlay box & ID badge
+      if (isClickable || isInput) {
+        const overlay = document.createElement('div');
+        overlay.className = 'som-mark-overlay';
+        overlay.style.top = `${rect.top + scrollY}px`;
+        overlay.style.left = `${rect.left + scrollX}px`;
+        overlay.style.width = `${rect.width}px`;
+        overlay.style.height = `${rect.height}px`;
+
+        const badge = document.createElement('div');
+        badge.className = 'som-mark-badge';
+        badge.textContent = String(currentId);
+        overlay.appendChild(badge);
+
+        this.overlayContainer.appendChild(overlay);
       }
 
       let text = (el.textContent || '').trim().replace(/\s+/g, ' ');
@@ -147,7 +186,6 @@ export class DOMExtractor {
       return false;
     }
 
-    // Check if within reasonably scrollable area
     return true;
   }
 

@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Cpu,
-  Cloud,
+  Server,
   FileText,
   MousePointer,
   HelpCircle,
@@ -31,7 +31,7 @@ import {
   saveStoredChatHistory,
 } from '../utils/storage';
 import { sendMessageToActiveTab, sendMessageToBackground } from '../utils/messaging';
-import { AgentCoordinator } from '../ai/cloud/provider';
+import { AgentCoordinator } from '../ai/coordinator';
 
 export const SidePanel: React.FC = () => {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
@@ -57,7 +57,7 @@ export const SidePanel: React.FC = () => {
           {
             id: 'welcome-msg',
             role: 'assistant',
-            content: `👋 **Welcome to AetherDOM AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **On-Device ViT** or **Cloud AI models**.\n\n🛡️ **Privacy Shield is Active**: Passwords, sensitive form inputs, credit cards, and faces are automatically stripped before any data leaves your browser.`,
+            content: `👋 **Welcome to AetherDOM AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **On-Device ViT** or our **Self-Hosted Model Backend**.\n\n🛡️ **Privacy Shield is Active**: Passwords, sensitive form inputs, credit cards, and faces are automatically stripped before any data leaves your browser.`,
             timestamp: Date.now(),
             modelUsed: 'AetherDOM System',
           },
@@ -293,8 +293,8 @@ export const SidePanel: React.FC = () => {
                       On-Device ViT
                     </Badge>
                   ) : (
-                    <Badge variant="neutral" size="sm" icon={<Cloud className="w-2.5 h-2.5" />}>
-                      Cloud AI
+                    <Badge variant="neutral" size="sm" icon={<Server className="w-2.5 h-2.5" />}>
+                      Custom Backend
                     </Badge>
                   )}
                 </>
