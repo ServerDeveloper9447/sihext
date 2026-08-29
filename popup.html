@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AetherDOM AI</title>
+    <style>
+      html, body {
+        width: 360px;
+        min-height: 480px;
+        margin: 0;
+        padding: 0;
+        background-color: #020617;
+        color: #f8fafc;
+        overflow-x: hidden;
+      }
+      #root {
+        width: 360px;
+        min-height: 480px;
+        display: flex;
+        flex-direction: column;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased w-[360px] min-h-[480px] overflow-hidden select-none">
+    <div id="root"></div>
+    <script type="module" src="/src/popup/index.tsx"></script>
+  </body>
+</html>
