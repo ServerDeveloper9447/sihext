@@ -1,5 +1,8 @@
 import { DEFAULT_SETTINGS, getStoredSettings, saveStoredSettings } from '../utils/storage';
+import { EntityLabelManager } from '../privacy/entity-label-manager';
 import { ExtensionMessage, ExtensionResponse } from '../types';
+
+const entityLabelManager = new EntityLabelManager();
 
 // Handle extension install and setup defaults
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -84,6 +87,19 @@ async function handleBackgroundMessage(
     case 'GET_SETTINGS': {
       const settings = await getStoredSettings();
       return { success: true, data: settings };
+    }
+
+    case 'GET_ENTITY_LABEL': {
+      const { piiType, value, ref } = message.payload as { piiType: string; value: string | null; ref: string };
+      const label = value
+        ? entityLabelManager.getLabelForValue(value, piiType, ref)
+        : entityLabelManager.getNewLabel(piiType, ref);
+      return { success: true, data: { label } };
+    }
+
+    case 'START_NEW_TASK': {
+      entityLabelManager.reset();
+      return { success: true };
     }
 
     default:

@@ -27,11 +27,10 @@ export class DOMExtractor {
    * Scans current webpage DOM, extracts interactive elements, assigns integer/ref IDs,
    * injects Set-of-Mark overlays, and sanitizes sensitive data.
    */
-  public extractDOM(): ExtractedDOMSummary {
+  public async extractDOM(): Promise<ExtractedDOMSummary> {
     this.cleanupOverlays();
     this.refCounter = 0;
 
-    // Create root Set-of-Mark overlay container
     this.overlayContainer = document.createElement('div');
     this.overlayContainer.id = 'som-overlay-container';
     document.documentElement.appendChild(this.overlayContainer);
@@ -39,7 +38,6 @@ export class DOMExtractor {
     const elements: InteractiveDOMNode[] = [];
     let sensitiveElementsCount = 0;
 
-    // Selector targeting interactive and semantic elements
     const targetSelector = [
       'button',
       'a[href]',
@@ -79,7 +77,21 @@ export class DOMExtractor {
       const tagName = el.tagName.toLowerCase();
       const isInput = ['input', 'select', 'textarea'].includes(tagName);
       const isClickable = ['button', 'a'].includes(tagName) || el.getAttribute('role') === 'button' || el.hasAttribute('onclick');
-      const isSensitive = this.sanitizer.isElementSensitive(el);
+
+      // value/placeholder must be extracted BEFORE classification, since
+      // getElementPiiType needs the current value to run its content-regex fallback.
+      let value: string | undefined;
+      let placeholder: string | undefined;
+
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+        value = el.value;
+        if ('placeholder' in el) {
+          placeholder = el.placeholder;
+        }
+      }
+
+      const piiType = this.sanitizer.getElementPiiType(el, value);
+      const isSensitive = piiType !== null;
 
       if (isSensitive) {
         sensitiveElementsCount++;
@@ -103,23 +115,14 @@ export class DOMExtractor {
       }
 
       let text = (el.textContent || '').trim().replace(/\s+/g, ' ');
-      // Limit text length per element to avoid huge payloads
       if (text.length > 250) {
         text = text.substring(0, 250) + '...';
       }
 
-      let value: string | undefined;
-      let placeholder: string | undefined;
-
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
-        value = el.value;
-        if ('placeholder' in el) {
-          placeholder = el.placeholder;
-        }
-      }
-
       const rawNode: InteractiveDOMNode = {
         refId,
+        domRef: refId,
+        piiType: piiType || undefined,
         tagName,
         type: el.getAttribute('type') || undefined,
         id: el.id || undefined,
@@ -148,11 +151,10 @@ export class DOMExtractor {
         selector: this.generateCSSSelector(el),
       };
 
-      const sanitizedNode = this.sanitizer.sanitizeNode(rawNode);
+      const sanitizedNode = await this.sanitizer.sanitizeNode(rawNode);
       elements.push(sanitizedNode);
     }
 
-    // Build sanitized page text summary
     const bodyText = (document.body.innerText || '').slice(0, 3000);
 
     return {

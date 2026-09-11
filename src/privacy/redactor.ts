@@ -1,4 +1,12 @@
+// redactor.ts
 import { PrivacySettings, RedactionReport } from '../types';
+
+const PII_PATTERNS: Record<string, RegExp> = {
+  card_number: /\b(?:\d[ -]*?){13,19}\b/g,
+  email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+  phone: /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
+  secret: /(?:api[_-]?key|bearer|token|secret|password|passwd|auth)\s*[:=]\s*['"]?([a-zA-Z0-9_\-.]{8,})['"]?/gi,
+};
 
 export class PrivacyRedactor {
   private settings: PrivacySettings;
@@ -11,110 +19,87 @@ export class PrivacyRedactor {
     this.settings = settings;
   }
 
-  /**
-   * Sanitizes a raw text string, replacing sensitive patterns with masked placeholders.
-   */
-  public sanitizeText(text: string): { sanitized: string; report: RedactionReport } {
-    if (!this.settings.enabled || !text) {
-      return {
-        sanitized: text,
-        report: {
-          passwordsMasked: 0,
-          emailsMasked: 0,
-          phonesMasked: 0,
-          creditCardsMasked: 0,
-          facesMasked: 0,
-          customMasks: 0,
-          totalRedacted: 0,
-          redactedLabels: [],
-        },
-      };
-    }
+  private async requestLabel(piiType: string, value: string, ref: string): Promise<string> {
+    const response = await chrome.runtime.sendMessage({
+      type: 'GET_ENTITY_LABEL',
+      payload: { piiType, value, ref },
+    });
+    return response.data.label;
+  }
+
+  private emptyReport(): RedactionReport {
+    return {
+      passwordsMasked: 0, emailsMasked: 0, phonesMasked: 0, creditCardsMasked: 0,
+      facesMasked: 0, customMasks: 0, totalRedacted: 0, redactedLabels: [],
+    };
+  }
+
+  public async sanitizeText(text: string, sourceRef = 'unknown'): Promise<{ sanitized: string; report: RedactionReport }> {
+    if (!this.settings.enabled || !text) return { sanitized: text, report: this.emptyReport() };
 
     let sanitized = text;
-    let passwordsMasked = 0;
-    let emailsMasked = 0;
-    let phonesMasked = 0;
-    let creditCardsMasked = 0;
-    let customMasks = 0;
-    const redactedLabels: string[] = [];
+    const report = this.emptyReport();
 
-    // 1. Credit Card Numbers (13-19 digits with spaces/hyphens)
     if (this.settings.maskCreditCards) {
-      const ccRegex = /\b(?:\d[ -]*?){13,19}\b/g;
-      sanitized = sanitized.replace(ccRegex, (match) => {
-        // Quick Luhn check or digit count filter
-        const digits = match.replace(/\D/g, '');
+      for (const m of [...sanitized.matchAll(PII_PATTERNS.card_number)]) {
+        const digits = m[0].replace(/\D/g, '');
         if (digits.length >= 13 && digits.length <= 19) {
-          creditCardsMasked++;
-          if (!redactedLabels.includes('Credit Card')) redactedLabels.push('Credit Card');
-          return '[REDACTED_CREDIT_CARD]';
-        }
-        return match;
-      });
-    }
-
-    // 2. Email Addresses
-    if (this.settings.maskEmails) {
-      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-      sanitized = sanitized.replace(emailRegex, () => {
-        emailsMasked++;
-        if (!redactedLabels.includes('Email')) redactedLabels.push('Email');
-        return '[REDACTED_EMAIL]';
-      });
-    }
-
-    // 3. Phone Numbers
-    if (this.settings.maskPhoneNumbers) {
-      const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
-      sanitized = sanitized.replace(phoneRegex, () => {
-        phonesMasked++;
-        if (!redactedLabels.includes('Phone Number')) redactedLabels.push('Phone Number');
-        return '[REDACTED_PHONE]';
-      });
-    }
-
-    // 4. API Keys, Tokens & Passwords in query strings or JSON-like text
-    if (this.settings.maskApiKeys) {
-      const tokenRegex = /(?:api[_-]?key|bearer|token|secret|password|passwd|auth)\s*[:=]\s*['"]?([a-zA-Z0-9_\-.]{8,})['"]?/gi;
-      sanitized = sanitized.replace(tokenRegex, (match, secret) => {
-        passwordsMasked++;
-        if (!redactedLabels.includes('Secret / Key')) redactedLabels.push('Secret / Key');
-        return match.replace(secret, '[REDACTED_SECRET]');
-      });
-    }
-
-    // 5. Custom Regex Rules
-    if (this.settings.customRegexRules && this.settings.customRegexRules.length > 0) {
-      for (const rule of this.settings.customRegexRules) {
-        try {
-          const reg = new RegExp(rule, 'gi');
-          sanitized = sanitized.replace(reg, () => {
-            customMasks++;
-            if (!redactedLabels.includes('Custom Rule')) redactedLabels.push('Custom Rule');
-            return '[REDACTED_CUSTOM]';
-          });
-        } catch {
-          // Ignore invalid custom regex
+          const label = await this.requestLabel('card_number', m[0], sourceRef);
+          sanitized = sanitized.replace(m[0], `[${label}]`);
+          report.creditCardsMasked++;
+          if (!report.redactedLabels.includes('Credit Card')) report.redactedLabels.push('Credit Card');
         }
       }
     }
 
-    const totalRedacted =
-      passwordsMasked + emailsMasked + phonesMasked + creditCardsMasked + customMasks;
+    if (this.settings.maskEmails) {
+      for (const m of [...sanitized.matchAll(PII_PATTERNS.email)]) {
+        const label = await this.requestLabel('email', m[0], sourceRef);
+        sanitized = sanitized.replace(m[0], `[${label}]`);
+        report.emailsMasked++;
+        if (!report.redactedLabels.includes('Email')) report.redactedLabels.push('Email');
+      }
+    }
 
-    return {
-      sanitized,
-      report: {
-        passwordsMasked,
-        emailsMasked,
-        phonesMasked,
-        creditCardsMasked,
-        facesMasked: 0,
-        customMasks,
-        totalRedacted,
-        redactedLabels,
-      },
-    };
+    if (this.settings.maskPhoneNumbers) {
+      for (const m of [...sanitized.matchAll(PII_PATTERNS.phone)]) {
+        const label = await this.requestLabel('phone', m[0], sourceRef);
+        sanitized = sanitized.replace(m[0], `[${label}]`);
+        report.phonesMasked++;
+        if (!report.redactedLabels.includes('Phone Number')) report.redactedLabels.push('Phone Number');
+      }
+    }
+
+    if (this.settings.maskApiKeys) {
+      for (const m of [...sanitized.matchAll(PII_PATTERNS.secret)]) {
+        const secretValue = m[1] || m[0];
+        const label = await this.requestLabel('password', secretValue, sourceRef);
+        sanitized = sanitized.replace(secretValue, `[${label}]`);
+        report.passwordsMasked++;
+        if (!report.redactedLabels.includes('Secret / Key')) report.redactedLabels.push('Secret / Key');
+      }
+    }
+
+    if (this.settings.customRegexRules?.length) {
+      for (const rule of this.settings.customRegexRules) {
+        try {
+          const reg = new RegExp(rule, 'gi');
+          for (const m of [...sanitized.matchAll(reg)]) {
+            const label = await this.requestLabel('custom', m[0], sourceRef);
+            sanitized = sanitized.replace(m[0], `[${label}]`);
+            report.customMasks++;
+            if (!report.redactedLabels.includes('Custom Rule')) report.redactedLabels.push('Custom Rule');
+          }
+        } catch {
+          // ignore invalid custom regex
+        }
+      }
+    }
+
+    report.totalRedacted =
+      report.passwordsMasked + report.emailsMasked + report.phonesMasked +
+      report.creditCardsMasked + report.customMasks;
+
+    return { sanitized, report };
   }
 }
