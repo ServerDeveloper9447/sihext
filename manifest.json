@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "AetherDOM AI - Hybrid Vision & DOM Agent",
+  "name": "Auxilium AI - Hybrid Vision & DOM Agent",
   "version": "1.0.0",
   "description": "Privacy-first hybrid AI Chrome extension with Set-of-Mark annotation, on-device ViT, custom model backend, and automated PII redaction.",
   "permissions": [
@@ -13,7 +13,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AetherDOM AI Assistant",
+    "default_title": "Auxilium AI Assistant",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -52,7 +52,7 @@
         "default": "Ctrl+Shift+E",
         "mac": "Command+Shift+E"
       },
-      "description": "Toggle AetherDOM AI Side Panel"
+      "description": "Toggle Auxilium AI Side Panel"
     }
   }
 }

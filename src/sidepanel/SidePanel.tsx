@@ -57,7 +57,7 @@ export const SidePanel: React.FC = () => {
           {
             id: 'welcome-msg',
             role: 'assistant',
-            content: `👋 **Welcome to AetherDOM AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **On-Device ViT** or our **Self-Hosted Model Backend**.\n\n🛡️ **Privacy Shield is Active**: Passwords, sensitive form inputs, credit cards, and faces are automatically stripped before any data leaves your browser.`,
+            content: `👋 **Welcome to Auxilium AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **On-Device ViT** or our **Self-Hosted Model Backend**.\n\n🛡️ **Privacy Shield is Active**: Passwords, sensitive form inputs, credit cards, and faces are automatically stripped before any data leaves your browser.`,
             timestamp: Date.now(),
             modelUsed: 'AetherDOM System',
           },
@@ -133,7 +133,7 @@ export const SidePanel: React.FC = () => {
         // Screenshot fallback
       }
 
-      // 3. Coordinate AI Execution turn (Router -> On-device ViT / Cloud + Privacy Redaction)
+      // 3. Coordinate AI Execution turn (Router -> On-device ViT / Custom Backend + Privacy Redaction)
       const { message: agentReply } = await coordinatorRef.current.executeAgentTurn(
         textToSend,
         currentDOM,
@@ -237,40 +237,40 @@ export const SidePanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 text-sm">
+    <div className="flex flex-col h-screen bg-sarvam-bg text-sarvam-text text-sm">
       <Header
         routingMode={settings.routingMode}
         selectedProvider={settings.selectedProvider}
-        privacyActive={settings.privacy.enabled}
+        privacyActive={settings.privacy?.enabled}
         onOpenSettings={openOptionsPage}
       />
 
       {/* Page Context Bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/50 border-b border-slate-800 text-xs text-slate-400">
-        <div className="flex items-center gap-1.5 truncate">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="truncate font-mono text-[11px]">
+      <div className="flex items-center justify-between px-4 py-2 bg-sarvam-card/60 border-b border-sarvam-border/80 text-xs text-sarvam-secondary">
+        <div className="flex items-center gap-2 truncate">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="truncate font-mono text-[11px] text-sarvam-text">
             {domSummary ? domSummary.title || activeTabUrl : 'Detecting active page...'}
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {domSummary && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+            <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-sarvam-bg border border-sarvam-border text-sarvam-secondary font-mono">
               {domSummary.interactiveCount} nodes
             </span>
           )}
           <button
             onClick={refreshCurrentTabDOM}
             title="Refresh DOM"
-            className="hover:text-indigo-400 transition-colors"
+            className="p-1 hover:text-white rounded-full hover:bg-white/5 transition-colors"
           >
-            <RotateCcw className="w-3 h-3" />
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {/* Chat & Execution Stream */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -278,16 +278,16 @@ export const SidePanel: React.FC = () => {
               msg.role === 'user' ? 'items-end' : 'items-start'
             }`}
           >
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 px-1">
+            <div className="flex items-center gap-1.5 text-[11px] text-sarvam-secondary px-1">
               {msg.role === 'user' ? (
                 <>
                   <span>You</span>
-                  <User className="w-3 h-3 text-indigo-400" />
+                  <User className="w-3 h-3 text-sarvam-indigoLight" />
                 </>
               ) : (
                 <>
-                  <Bot className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="font-medium text-slate-300">{msg.modelUsed || 'AI Assistant'}</span>
+                  <Bot className="w-3.5 h-3.5 text-sarvam-indigoLight" />
+                  <span className="font-medium text-sarvam-text">{msg.modelUsed || 'AI Assistant'}</span>
                   {msg.isLocalExecution ? (
                     <Badge variant="brand" size="sm" icon={<Cpu className="w-2.5 h-2.5" />}>
                       On-Device ViT
@@ -301,39 +301,39 @@ export const SidePanel: React.FC = () => {
               )}
             </div>
 
-            {/* Message Bubble */}
+            {/* Message Bubble with Sarvam styling */}
             <div
-              className={`rounded-2xl p-3 max-w-[92%] leading-relaxed ${
+              className={`rounded-2xl p-3.5 max-w-[92%] leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-indigo-600 text-white rounded-tr-sm shadow-md'
-                  : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-sm shadow-sm'
+                  ? 'bg-gradient-to-b from-[#3a3f5c] to-[#1e2033] text-white rounded-tr-sm border border-white/10 shadow-md'
+                  : 'sarvam-card text-sarvam-text rounded-tl-sm shadow-sm border border-sarvam-border'
               }`}
             >
-              <div className="whitespace-pre-wrap prose prose-invert prose-xs">
+              <div className="whitespace-pre-wrap prose prose-invert prose-xs text-[13px] leading-relaxed">
                 {msg.content}
               </div>
 
               {/* Privacy Redaction Report */}
               {msg.redactionReport && msg.redactionReport.totalRedacted > 0 && (
-                <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-emerald-400 bg-emerald-950/20 px-2 py-1 rounded">
-                  <div className="flex items-center gap-1">
-                    <Shield className="w-3 h-3" />
+                <div className="mt-3 pt-2 border-t border-sarvam-border/70 flex items-center justify-between text-[11px] text-emerald-400 bg-emerald-950/20 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5" />
                     <span>
                       Redacted {msg.redactionReport.totalRedacted} sensitive field
                       {msg.redactionReport.totalRedacted > 1 ? 's' : ''} (
                       {msg.redactionReport.redactedLabels.join(', ')})
                     </span>
                   </div>
-                  <span className="text-[10px] text-emerald-500 font-mono">Protected</span>
+                  <span className="text-[10px] text-emerald-400 font-mono tracking-wide">Shielded</span>
                 </div>
               )}
 
               {/* Action Plan Card */}
               {msg.actions && msg.actions.length > 0 && (
-                <div className="mt-3 pt-2.5 border-t border-slate-800 space-y-2">
+                <div className="mt-3.5 pt-3 border-t border-sarvam-border/80 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-indigo-300 flex items-center gap-1">
-                      <Play className="w-3 h-3" /> Action Plan ({msg.actions.length} step
+                    <span className="font-serif text-sm font-semibold text-sarvam-indigoLight flex items-center gap-1.5">
+                      <Play className="w-3.5 h-3.5 text-sarvam-indigo" /> Action Plan ({msg.actions.length} step
                       {msg.actions.length > 1 ? 's' : ''})
                     </span>
                     <Button
@@ -346,22 +346,22 @@ export const SidePanel: React.FC = () => {
                     </Button>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {msg.actions.map((act) => (
                       <div
                         key={act.id}
                         onMouseEnter={() => handleHighlightElement(act.refId)}
                         onMouseLeave={handleClearHighlight}
-                        className={`flex items-center justify-between p-2 rounded-lg text-xs border transition-colors ${
+                        className={`flex items-center justify-between p-2.5 rounded-xl text-xs border transition-colors ${
                           act.status === 'completed'
                             ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
                             : act.status === 'failed'
                             ? 'bg-rose-950/20 border-rose-500/30 text-rose-300'
-                            : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                            : 'bg-sarvam-bg/90 border-sarvam-border text-sarvam-text hover:border-sarvam-indigo/50'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate pr-2">
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px] uppercase">
+                          <span className="px-2 py-0.5 rounded-full bg-[#1e2235] text-sarvam-indigoLight border border-sarvam-indigo/20 font-mono text-[10px] uppercase">
                             {act.type}
                           </span>
                           <span className="truncate">{act.description}</span>
@@ -393,9 +393,9 @@ export const SidePanel: React.FC = () => {
         ))}
 
         {isLoading && (
-          <div className="flex items-center gap-2 text-xs text-indigo-400 p-2 bg-indigo-950/20 rounded-lg border border-indigo-500/20 animate-pulse">
-            <Sparkles className="w-4 h-4 animate-spin-slow" />
-            <span>Analyzing DOM and formulating response...</span>
+          <div className="flex items-center gap-2.5 text-xs text-sarvam-indigoLight p-3 bg-sarvam-card rounded-xl border border-sarvam-indigo/20 animate-pulse">
+            <Sparkles className="w-4 h-4 animate-spin-slow text-sarvam-indigo" />
+            <span>Analyzing webpage DOM and formulating action response...</span>
           </div>
         )}
 
@@ -403,24 +403,24 @@ export const SidePanel: React.FC = () => {
       </div>
 
       {/* Quick Action Suggestions */}
-      <div className="px-3 py-2 bg-slate-900/30 border-t border-slate-800/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <div className="px-3 py-2 bg-sarvam-card/40 border-t border-sarvam-border/60 flex items-center gap-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => handleSendMessage('Summarize the key information on this webpage.')}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition-colors whitespace-nowrap"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sarvam-card hover:bg-[#1a1d2c] border border-sarvam-border text-sarvam-secondary hover:text-white text-[11px] font-medium transition-all whitespace-nowrap shadow-sm"
         >
-          <FileText className="w-3 h-3 text-indigo-400" />
+          <FileText className="w-3 h-3 text-sarvam-indigo" />
           Summarize Page
         </button>
         <button
           onClick={() => handleSendMessage('List all interactive form inputs on this page.')}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition-colors whitespace-nowrap"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sarvam-card hover:bg-[#1a1d2c] border border-sarvam-border text-sarvam-secondary hover:text-white text-[11px] font-medium transition-all whitespace-nowrap shadow-sm"
         >
           <MousePointer className="w-3 h-3 text-emerald-400" />
           Find Forms
         </button>
         <button
           onClick={() => handleSendMessage('Explain what actions can be taken on this page.')}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition-colors whitespace-nowrap"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sarvam-card hover:bg-[#1a1d2c] border border-sarvam-border text-sarvam-secondary hover:text-white text-[11px] font-medium transition-all whitespace-nowrap shadow-sm"
         >
           <HelpCircle className="w-3 h-3 text-amber-400" />
           Available Actions
@@ -428,7 +428,8 @@ export const SidePanel: React.FC = () => {
       </div>
 
       {/* Query Input Box */}
-      <div className="p-3 bg-slate-900 border-t border-slate-800">
+      <div className="p-3 bg-sarvam-card border-t border-sarvam-border relative">
+        <div className="absolute inset-x-0 top-0 h-px sarvam-divider opacity-40"></div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -442,7 +443,7 @@ export const SidePanel: React.FC = () => {
             onChange={(e) => setInputQuery(e.target.value)}
             placeholder="Ask a question or describe an action..."
             disabled={isLoading}
-            className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+            className="flex-1 px-4 py-2.5 bg-sarvam-bg border border-sarvam-border rounded-full text-xs text-sarvam-text placeholder-sarvam-tertiary focus:outline-none focus:border-sarvam-indigo focus:ring-1 focus:ring-sarvam-indigo transition-all disabled:opacity-50"
           />
           <Button
             type="submit"
@@ -450,6 +451,7 @@ export const SidePanel: React.FC = () => {
             variant="primary"
             disabled={!inputQuery.trim() || isLoading}
             isLoading={isLoading}
+            className="rounded-full px-4"
           >
             <Send className="w-3.5 h-3.5" />
           </Button>

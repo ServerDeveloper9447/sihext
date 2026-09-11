@@ -1,4 +1,4 @@
-# AetherDOM AI — Hybrid Vision & DOM Agent
+# Auxilium AI — Hybrid Vision & DOM Agent
 
 A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **Vite**, **Tailwind CSS**, and **CRXJS**. It features an intelligent dual-engine architecture with **Set-of-Mark (SoM) DOM Annotation**, **Offscreen Canvas Redaction**, **On-Device ViT**, a **Self-Hosted Model Backend**, and rich **React + Tailwind UI** interfaces.
 
