@@ -43,7 +43,7 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
         const settings = await getStoredSettings();
         extractor = new DOMExtractor(settings.privacy);
       }
-      const domSummary: ExtractedDOMSummary = extractor.extractDOM();
+      const domSummary: ExtractedDOMSummary = await extractor.extractDOM();
       return { success: true, data: domSummary };
     }
 

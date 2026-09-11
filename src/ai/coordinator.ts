@@ -9,19 +9,24 @@ import { OnDeviceViTEngine } from './ondevice/vit-engine';
 import { CustomBackendClient } from './backend/custom-backend-client';
 import { CanvasRedactor, RedactionRegion } from '../privacy/canvas-redactor';
 
+const IMAGE_PII_TYPES = new Set(['face', 'aadhar_card', 'pan_card', 'passport', 'qr_code', 'document']);
+
+/** Pulls the already-assigned label (e.g. "name-1") out of a sanitized "[name-1]" string. */
+function extractLabel(sanitizedValue: string | undefined, sanitizedText: string | undefined, fallbackType: string | undefined): string {
+  const source = sanitizedValue || sanitizedText || '';
+  const match = source.match(/\[([^\]]+)\]/);
+  return match ? match[1] : (fallbackType ? `${fallbackType}-1` : 'field-1');
+}
+
 export class AgentCoordinator {
   private vitEngine = new OnDeviceViTEngine();
 
-  /**
-   * Orchestrates query execution across router, privacy filters, on-device ViT, and custom backend.
-   */
   public async executeAgentTurn(
     prompt: string,
     domSummary: ExtractedDOMSummary,
     settings: ExtensionSettings,
     rawScreenshotUrl?: string
   ): Promise<{ message: AgentMessage; routing: RoutingDecision }> {
-    // 1. Decide route (On-device ViT vs Custom Backend)
     const routing = AIRouter.decideRoute(prompt, domSummary, settings);
 
     let answer = '';
@@ -42,25 +47,21 @@ export class AgentCoordinator {
     };
 
     if (routing.target === 'on-device') {
-      // Execute with local on-device ViT engine (zero outbound traffic)
       const localRes = await this.vitEngine.processLocal(prompt, domSummary);
       answer = localRes.answer;
       actions = localRes.actions;
       modelUsed = localRes.modelUsed;
       isLocalExecution = true;
     } else {
-      // 2. Prepare Custom Backend Request with Privacy Redaction
       if (rawScreenshotUrl && settings.privacy.enabled) {
-        // Collect sensitive regions for image redaction
         const sensitiveRegions: RedactionRegion[] = domSummary.elements
           .filter((el) => el.isSensitive)
           .map((el) => ({
             box: el.boundingBox,
-            label: '🔒 REDACTED',
-            type: 'password',
+            label: extractLabel(el.value, el.text, el.piiType),
+            redactionStyle: IMAGE_PII_TYPES.has(el.piiType ?? '') ? 'blur' : 'blackout',
           }));
 
-        // Redact screenshot before sending to backend
         redactedScreenshot = await CanvasRedactor.redactScreenshot(
           rawScreenshotUrl,
           sensitiveRegions
@@ -69,7 +70,6 @@ export class AgentCoordinator {
         redactedScreenshot = rawScreenshotUrl;
       }
 
-      // 3. Dispatch to our own model backend
       const backendClient = new CustomBackendClient(settings.backend);
       const backendRes = await backendClient.generateAgentResponse(
         prompt,

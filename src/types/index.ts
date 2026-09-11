@@ -20,6 +20,8 @@ export interface BoundingBox {
 
 export interface InteractiveDOMNode {
   refId: string;
+  domRef?: string;
+  piiType?: string;
   tagName: string;
   type?: string;
   id?: string;
@@ -144,7 +146,9 @@ export type MessageType =
   | 'PROCESS_QUERY'
   | 'GET_SETTINGS'
   | 'SAVE_SETTINGS'
-  | 'OPEN_SIDE_PANEL';
+  | 'OPEN_SIDE_PANEL'
+  | 'GET_ENTITY_LABEL'
+  | 'START_NEW_TASK';
 
 export interface ExtensionMessage<T = unknown> {
   type: MessageType;
