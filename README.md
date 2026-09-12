@@ -47,7 +47,7 @@ A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **
     ├── ai/                    # Custom backend client, router, on-device ViT & turn coordinator
     ├── components/            # Reusable UI library (Button, Card, Toggle, Badge, Header)
     ├── content/               # Modular DOM extractor, action executor, and highlighter
-    ├── privacy/               # Canvas redactor, DOM sanitizer, and text PII scrubber
+    ├── privacy/               # Canvas redactor, DOM sanitizer, entity label manager and text PII scrubber
     ├── sidepanel/             # Side Panel React workspace
     ├── popup/                 # Popup React component
     ├── options/               # Settings Page React component
