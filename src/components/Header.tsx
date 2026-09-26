@@ -19,10 +19,9 @@ export const Header: React.FC<HeaderProps> = ({
   showSidePanelButton = false,
 }) => {
   return (
-    <header className="relative bg-sarvam-bg/95 backdrop-blur-md border-b border-sarvam-border/80 sticky top-0 z-30">
+    <header className="relative bg-sarvam-bg/95 backdrop-blur-md border-b border-sarvam-border/80 top-0 z-30">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2.5">
-          {/* Sovereign geometric gateway logo */}
           <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-[#3a3f5c] to-[#1e2033] border border-white/10 flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_6px_rgba(0,0,0,0.4)]">
             <svg
               className="w-4 h-4 text-sarvam-indigoLight"
@@ -40,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-serif text-base tracking-tight font-medium text-white">
+              <h1 className="font-serif text-[17px] tracking-wide font-medium text-white">
                 Auxilium AI
               </h1>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[#1e2235] text-sarvam-indigoLight border border-sarvam-indigo/20">
@@ -54,7 +53,6 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Privacy shield indicator */}
           <div
             title={privacyActive ? 'Privacy Shield Active (PII & Passwords stripped)' : 'Privacy Shield Off'}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
@@ -88,7 +86,6 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </div>
-      {/* Subtle bottom radial gradient line like Sarvam */}
       <div className="absolute inset-x-0 bottom-0 h-px sarvam-divider opacity-60"></div>
     </header>
   );

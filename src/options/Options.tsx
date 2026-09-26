@@ -105,7 +105,7 @@ export const Options: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2.5">
-                <h1 className="font-serif text-2xl font-medium tracking-tight text-white">
+                <h1 className="font-serif text-2xl font-medium tracking-wide text-white">
                   Auxilium AI Settings
                 </h1>
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1e2235] text-sarvam-indigoLight border border-sarvam-indigo/25">

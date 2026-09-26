@@ -218,14 +218,33 @@ async function executeAction(payload) {
   }
 }
 
-function cleanupOverlays() {
+function removeVisualOverlays() {
   const existing = document.getElementById('som-overlay-container');
   if (existing) {
     existing.remove();
   }
-  document.querySelectorAll('[data-som-id]').forEach((el) => el.removeAttribute('data-som-id'));
+  document.querySelectorAll('.som-mark-overlay, .som-mark-badge').forEach((el) => el.remove());
   overlayContainer = null;
 }
+
+function cleanupOverlays() {
+  removeVisualOverlays();
+  document.querySelectorAll('[data-som-id]').forEach((el) => el.removeAttribute('data-som-id'));
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    cleanupOverlays();
+  }
+});
+
+window.addEventListener('click', (e) => {
+  if (!e.isTrusted) return;
+  const existing = document.getElementById('som-overlay-container');
+  if (existing) {
+    removeVisualOverlays();
+  }
+}, { capture: true });
 
 // Helper: Check element visibility
 function isElementVisible(el) {
@@ -242,8 +261,10 @@ function isElementVisible(el) {
 // Message Dispatcher
 // ==========================================
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.action === 'PREPARE_DOM') {
+  const action = message.action || message.type;
+  if (action === 'PREPARE_DOM') {
     try {
+      cleanupOverlays();
       const piiBoxes = findPII();
       const interactiveElements = applySetOfMark();
       sendResponse({
@@ -258,14 +279,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === 'EXECUTE_ACTION') {
+  if (action === 'EXECUTE_ACTION') {
     executeAction(message.payload)
       .then((res) => sendResponse(res))
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
-  if (message.action === 'CLEANUP_DOM') {
+  if (action === 'CLEANUP_DOM' || action === 'CLEANUP_OVERLAYS') {
+    removeVisualOverlays();
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (action === 'CLEAR_HIGHLIGHT' || action === 'RESET_DOM') {
     cleanupOverlays();
     sendResponse({ success: true });
     return true;

@@ -59,13 +59,17 @@ export const SidePanel: React.FC = () => {
             role: 'assistant',
             content: `👋 **Welcome to Auxilium AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **On-Device ViT** or our **Self-Hosted Model Backend**.\n\n🛡️ **Privacy Shield is Active**: Passwords, sensitive form inputs, credit cards, and faces are automatically stripped before any data leaves your browser.`,
             timestamp: Date.now(),
-            modelUsed: 'AetherDOM System',
+            modelUsed: "Auxilium System",
           },
         ]);
       }
     });
 
     refreshCurrentTabDOM();
+
+    return () => {
+      sendMessageToActiveTab({ type: "CLEANUP_OVERLAYS" }).catch(() => {});
+    };
   }, []);
 
   // Scroll to bottom when messages update
@@ -85,6 +89,7 @@ export const SidePanel: React.FC = () => {
         setDomSummary(response.data);
         setActiveTabUrl(response.data.url);
       }
+      sendMessageToActiveTab({ type: "CLEANUP_OVERLAYS" }).catch(() => {});
     } catch {
       // Content script may not be injected yet
     }
@@ -156,6 +161,7 @@ export const SidePanel: React.FC = () => {
       ]);
     } finally {
       setIsLoading(false);
+      sendMessageToActiveTab({ type: "CLEANUP_OVERLAYS" }).catch(() => {});
     }
   };
 
@@ -315,7 +321,7 @@ export const SidePanel: React.FC = () => {
 
               {/* Privacy Redaction Report */}
               {msg.redactionReport && msg.redactionReport.totalRedacted > 0 && (
-                <div className="mt-3 pt-2 border-t border-sarvam-border/70 flex items-center justify-between text-[11px] text-emerald-400 bg-emerald-950/20 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                <div className="mt-3 pt-2 border-t border-sarvam-border/70 flex items-center justify-between text-[11px] text-emerald-400 bg-emerald-950/20 px-2.5 py-1.5 rounded-lg border">
                   <div className="flex items-center gap-1.5">
                     <Shield className="w-3.5 h-3.5" />
                     <span>

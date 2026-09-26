@@ -14,26 +14,47 @@ export class DOMExtractor {
     this.sanitizer.updateSettings(settings);
   }
 
-  public cleanupOverlays() {
+  private autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
+
+  public removeVisualOverlays() {
+    if (this.autoDismissTimer) {
+      clearTimeout(this.autoDismissTimer);
+      this.autoDismissTimer = null;
+    }
     if (this.overlayContainer) {
       this.overlayContainer.remove();
       this.overlayContainer = null;
     }
     const existing = document.getElementById('som-overlay-container');
     if (existing) existing.remove();
+    document.querySelectorAll('.som-mark-overlay, .som-mark-badge').forEach((el) => el.remove());
+  }
+
+  public cleanupOverlays(clearIds: boolean = false) {
+    this.removeVisualOverlays();
+    if (clearIds) {
+      document.querySelectorAll('[data-som-id]').forEach((el) => el.removeAttribute('data-som-id'));
+    }
   }
 
   /**
    * Scans current webpage DOM, extracts interactive elements, assigns integer/ref IDs,
-   * injects Set-of-Mark overlays, and sanitizes sensitive data.
+   * and optionally injects Set-of-Mark overlays when requested.
    */
-  public async extractDOM(): Promise<ExtractedDOMSummary> {
-    this.cleanupOverlays();
+  public async extractDOM(options: { injectOverlays?: boolean } = {}): Promise<ExtractedDOMSummary> {
+    this.cleanupOverlays(true);
     this.refCounter = 0;
 
-    this.overlayContainer = document.createElement('div');
-    this.overlayContainer.id = 'som-overlay-container';
-    document.documentElement.appendChild(this.overlayContainer);
+    const shouldInject = Boolean(options.injectOverlays);
+    if (shouldInject) {
+      this.overlayContainer = document.createElement('div');
+      this.overlayContainer.id = 'som-overlay-container';
+      document.documentElement.appendChild(this.overlayContainer);
+
+      this.autoDismissTimer = setTimeout(() => {
+        this.removeVisualOverlays();
+      }, 15000);
+    }
 
     const elements: InteractiveDOMNode[] = [];
     let sensitiveElementsCount = 0;
@@ -97,8 +118,7 @@ export class DOMExtractor {
         sensitiveElementsCount++;
       }
 
-      // Inject Set-of-Mark visual overlay box & ID badge
-      if (isClickable || isInput) {
+      if (shouldInject && this.overlayContainer && (isClickable || isInput)) {
         const overlay = document.createElement('div');
         overlay.className = 'som-mark-overlay';
         overlay.style.top = `${rect.top + scrollY}px`;

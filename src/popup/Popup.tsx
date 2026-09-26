@@ -23,6 +23,10 @@ export const Popup: React.FC = () => {
   useEffect(() => {
     getStoredSettings().then(setSettings);
     fetchPageInfo();
+
+    return () => {
+      sendMessageToActiveTab({ type: 'CLEANUP_OVERLAYS' }).catch(() => { });
+    };
   }, []);
 
   const fetchPageInfo = async () => {
@@ -34,6 +38,7 @@ export const Popup: React.FC = () => {
       if (res.success && res.data) {
         setDomSummary(res.data);
       }
+      sendMessageToActiveTab({ type: 'CLEANUP_OVERLAYS' }).catch(() => { });
     } catch {
       // Content script may not be available on chrome:// pages
     } finally {
@@ -94,10 +99,10 @@ export const Popup: React.FC = () => {
             </svg>
           </div>
           <div>
-            <h1 className="font-serif text-base tracking-tight font-medium text-white leading-none">
+            <h1 className="font-serif text-[17px] tracking-wide font-medium text-white leading-none">
               Auxilium AI
             </h1>
-            <span className="text-[10px] text-sarvam-secondary tracking-wide block mt-0.5">
+            <span className="text-[10.5px] text-sarvam-secondary tracking-wide block mt-1">
               Hybrid Vision & DOM Agent
             </span>
           </div>

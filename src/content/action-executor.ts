@@ -61,7 +61,13 @@ export class ActionExecutor {
 
   private resolveElement(action: AgentAction): HTMLElement | null {
     if (action.refId) {
-      const el = document.querySelector(`[data-sihext-ref="${action.refId}"]`);
+      let el = document.querySelector(`[data-sihext-ref="${action.refId}"]`);
+      if (!el) {
+        const somId = action.refId.startsWith('sihext-')
+          ? action.refId.replace('sihext-', '')
+          : action.refId;
+        el = document.querySelector(`[data-som-id="${somId}"]`);
+      }
       if (el instanceof HTMLElement) return el;
     }
     if (action.selector) {

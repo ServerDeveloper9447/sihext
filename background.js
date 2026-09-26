@@ -165,6 +165,8 @@ async function executeAgentLoop(prompt, sendProgress) {
       format: 'png',
     });
 
+    chrome.tabs.sendMessage(activeTab.id, { action: 'CLEANUP_DOM' }).catch(() => { });
+
     // 5. Send to Offscreen Document for Canvas & ML Redaction (Step E)
     sendProgress?.({ step: 'redact_image', message: 'Running on-device visual redaction (Canvas + ML Face Detection)...' });
     const redactResponse = await chrome.runtime.sendMessage({
