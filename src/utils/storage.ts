@@ -3,9 +3,9 @@ import { ExtensionSettings, AgentMessage } from '../types';
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   routingMode: 'auto',
   selectedProvider: 'custom-backend',
-  onDeviceModel: 'vit-base-webgpu',
+  onDeviceModel: 'yolo',
   backend: {
-    endpointUrl: 'http://localhost:8000/api/v1/agent',
+    endpointUrl: 'https://server-tau-nine-29.vercel.app/agent',
     apiKey: '',
     modelName: 'custom-dom-agent-v1',
     timeoutMs: 30000,
@@ -45,9 +45,15 @@ export async function getStoredSettings(): Promise<ExtensionSettings> {
         resolve({
           ...DEFAULT_SETTINGS,
           ...stored,
+          onDeviceModel: stored.onDeviceModel === 'yolo26n-webgpu'
+            ? DEFAULT_SETTINGS.onDeviceModel
+            : stored.onDeviceModel || DEFAULT_SETTINGS.onDeviceModel,
           backend: {
             ...DEFAULT_SETTINGS.backend,
             ...(stored.backend || {}),
+            endpointUrl: stored.backend?.endpointUrl === 'http://localhost:8000/api/v1/agent'
+              ? DEFAULT_SETTINGS.backend.endpointUrl
+              : stored.backend?.endpointUrl || DEFAULT_SETTINGS.backend.endpointUrl,
           },
           privacy: {
             ...DEFAULT_SETTINGS.privacy,

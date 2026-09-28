@@ -2,7 +2,14 @@ import { DOMExtractor } from './dom-extractor';
 import { ActionExecutor } from './action-executor';
 import { ElementHighlighter } from './highlighter';
 import { DEFAULT_SETTINGS, getStoredSettings } from '../utils/storage';
-import { ExtensionMessage, ExtensionResponse, AgentAction, ExtractedDOMSummary } from '../types';
+import {
+  ExtensionMessage,
+  ExtensionResponse,
+  AgentAction,
+  ExtractedDOMSummary,
+  ServerAgentAction,
+  fromServerAction,
+} from '../types';
 
 let extractor: DOMExtractor;
 const executor = new ActionExecutor();
@@ -78,7 +85,6 @@ async function handleMessage(
       return {
         success: true,
         data: domSummary,
-        // Match content.js shape for background.js consumer
         ...({ piiBoxes, interactiveElements: domSummary.elements } as any),
       };
     }
@@ -89,21 +95,15 @@ async function handleMessage(
         return { success: false, error: 'No action provided' };
       }
 
-      let action: AgentAction;
-      if (rawPayload.action && !rawPayload.type) {
-        const actionType = String(rawPayload.action) as AgentAction['type'];
-        const targetId = rawPayload.target_id ? String(rawPayload.target_id) : undefined;
-        action = {
-          id: `act-${Date.now()}`,
-          type: actionType,
-          refId: targetId ? `sihext-${targetId}` : (rawPayload.refId as string | undefined),
-          value: rawPayload.value as string | undefined,
-          description: (rawPayload.description as string) || `${actionType} on target [${targetId || ''}]`,
-          status: 'pending',
-        };
-      } else {
-        action = rawPayload as unknown as AgentAction;
-      }
+      // Accept either the raw server response shape (snake_case, "action"
+      // key) or an already-normalized AgentAction ("type" key). Both paths
+      // now go through the SAME fromServerAction() used by
+      // custom-backend-client.ts, so field mapping (x, y, key, url,
+      // answerText, targetRefId, etc.) can't silently drift between the two.
+      const action: AgentAction =
+        rawPayload.action && !rawPayload.type
+          ? fromServerAction(rawPayload as unknown as ServerAgentAction, `act-${Date.now()}`)
+          : (rawPayload as unknown as AgentAction);
 
       // Highlight target element during action execution
       if (action.refId) {

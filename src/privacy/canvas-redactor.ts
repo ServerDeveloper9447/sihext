@@ -9,7 +9,8 @@ export interface RedactionRegion {
 export class CanvasRedactor {
   public static async redactScreenshot(
     dataUrl: string,
-    regions: RedactionRegion[]
+    regions: RedactionRegion[],
+    viewport: { width: number; height: number }
   ): Promise<string> {
     if (!regions || regions.length === 0) {
       return dataUrl;
@@ -31,13 +32,19 @@ export class CanvasRedactor {
           }
 
           ctx.drawImage(img, 0, 0);
+          const scaleX = canvas.width / viewport.width;
+          const scaleY = canvas.height / viewport.height;
 
           for (const region of regions) {
             const { x, y, width, height } = region.box;
-            const drawX = Math.max(0, x);
-            const drawY = Math.max(0, y);
-            const drawW = Math.min(width, canvas.width - drawX);
-            const drawH = Math.min(height, canvas.height - drawY);
+            const scaledX = x * scaleX;
+            const scaledY = y * scaleY;
+            const scaledRight = (x + width) * scaleX;
+            const scaledBottom = (y + height) * scaleY;
+            const drawX = Math.max(0, scaledX);
+            const drawY = Math.max(0, scaledY);
+            const drawW = Math.min(scaledRight, canvas.width) - drawX;
+            const drawH = Math.min(scaledBottom, canvas.height) - drawY;
             if (drawW <= 0 || drawH <= 0) continue;
 
             ctx.save();

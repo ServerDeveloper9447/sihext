@@ -1,8 +1,9 @@
-import { ExtractedDOMSummary, AgentAction, CustomBackendConfig } from '../../types';
+import { ExtractedDOMSummary, AgentAction, CustomBackendConfig, ServerAgentAction, fromServerAction } from '../../types';
+import { denormalizeCoordinates } from '../../utils/coordinates';
 
 export interface CustomBackendResponse {
   answer: string;
-  actions: AgentAction[];
+  action: AgentAction;
   modelUsed: string;
   latencyMs?: number;
   tokensUsed?: number;
@@ -16,7 +17,7 @@ export class CustomBackendClient {
   }
 
   /**
-   * Tests connectivity to the custom model backend.
+   * Tests connectivity to the agent server (GET /health).
    */
   public async testConnection(): Promise<{ ok: boolean; message: string; latencyMs: number }> {
     const start = performance.now();
@@ -33,19 +34,11 @@ export class CustomBackendClient {
         headers['Authorization'] = `Bearer ${this.config.apiKey}`;
       }
 
-      // Try GET/POST health probe
-      const res = await fetch(this.config.endpointUrl, {
-        method: 'POST',
+      const healthUrl = this.config.endpointUrl.replace(/\/agent\/?$/, '/health');
+      const res = await fetch(healthUrl, {
+        method: 'GET',
         headers,
-        body: JSON.stringify({ ping: true }),
         signal: controller.signal,
-      }).catch(async () => {
-        // Fallback to GET probe
-        return await fetch(this.config.endpointUrl, {
-          method: 'GET',
-          headers,
-          signal: controller.signal,
-        });
       });
 
       clearTimeout(timeoutId);
@@ -77,12 +70,17 @@ export class CustomBackendClient {
   }
 
   /**
-   * Sends sanitized DOM + query + redacted screenshot to our custom model backend.
+   * Sends the redacted DOM + task + sanitized screenshot + prior action
+   * history to the agent server and returns the SINGLE next action to
+   * execute. This is a one-action-per-call loop, not a full multi-step
+   * plan -- call this again after executing the returned action, with an
+   * updated history, until the action is "done".
    */
   public async generateAgentResponse(
-    prompt: string,
+    task: string,
     domSummary: ExtractedDOMSummary,
-    redactedScreenshotUrl?: string
+    redactedScreenshotUrl?: string,
+    history: string[] = []
   ): Promise<CustomBackendResponse> {
     if (!this.config.endpointUrl) {
       throw new Error('Custom backend endpoint URL is not configured. Please set it in Extension Settings.');
@@ -102,29 +100,19 @@ export class CustomBackendClient {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 
+    // Matches SanitizedRequestSchema in schemas.py exactly.
     const payload = {
-      query: prompt,
-      model: this.config.modelName || 'custom-dom-agent-v1',
-      page: {
-        title: domSummary.title,
-        url: domSummary.url,
-        viewport: domSummary.viewport,
-      },
-      elements: domSummary.elements.slice(0, 120).map((el) => ({
-        refId: el.refId,
-        tagName: el.tagName,
-        type: el.type,
-        text: el.text,
-        placeholder: el.placeholder,
-        role: el.role,
-        ariaLabel: el.ariaLabel,
-        isInput: el.isInput,
-        isClickable: el.isClickable,
-        boundingBox: el.boundingBox,
-        selector: el.selector,
-      })),
+      task,
       screenshot: redactedScreenshotUrl || null,
-      timestamp: Date.now(),
+      dom: {
+        elements: domSummary.elements.slice(0, 120).map((el) => ({
+          element_id: Number(el.refId.replace(/^sihext-/, '')),
+          tag: el.tagName,
+          label: (el.value || el.text || el.ariaLabel || el.placeholder || el.name || '')
+            .replace(/^\[([^\]]+)\]$/, '$1'),
+        })),
+      },
+      history,
     };
 
     try {
@@ -140,68 +128,38 @@ export class CustomBackendClient {
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         throw new Error(
-          `Custom Backend Error (${response.status}): ${errorText || response.statusText}`
+          `Agent Server Error (${response.status}): ${errorText || response.statusText}`
         );
       }
 
-      const result = await response.json();
+      const result: ServerAgentAction = await response.json();
       const latencyMs = Math.round(performance.now() - startTime);
 
-      // Support multiple response shapes from custom backend
-      // Shape A: { answer: "...", actions: [ ... ] }
-      // Shape B: { message: "...", plan: [ ... ] }
-      // Shape C: { choices: [{ message: { content: "{ answer, actions }" } }] } (OpenAI style)
-      if (result.choices && result.choices[0]?.message?.content) {
-        const rawContent = result.choices[0].message.content;
-        try {
-          const parsed = JSON.parse(rawContent);
-          return {
-            answer: parsed.answer || rawContent,
-            actions: (parsed.actions || []).map((a: AgentAction, idx: number) => ({
-              ...a,
-              id: a.id || `act-${Date.now()}-${idx}`,
-              status: 'pending',
-            })),
-            modelUsed: `Custom Backend (${this.config.modelName})`,
-            latencyMs,
-          };
-        } catch {
-          return {
-            answer: rawContent,
-            actions: [],
-            modelUsed: `Custom Backend (${this.config.modelName})`,
-            latencyMs,
-          };
-        }
-      }
+      // The model returns x/y on a 0-1000 scale; convert to real viewport
+      // pixels here, once, so everything downstream (the executor) only ever
+      // deals with real coordinates.
+      const action = denormalizeCoordinates(
+        fromServerAction(result, `act-${Date.now()}`),
+        domSummary.viewport
+      );
 
-      const answer = result.answer || result.message || result.response || 'Action plan formulated.';
-      const rawActions = result.actions || result.plan || [];
-
-      const actions: AgentAction[] = Array.isArray(rawActions)
-        ? rawActions.map((a: Partial<AgentAction>, idx: number) => ({
-            id: a.id || `act-${Date.now()}-${idx}`,
-            type: (a.type || 'click') as AgentAction['type'],
-            refId: a.refId,
-            selector: a.selector,
-            value: a.value,
-            scrollDirection: a.scrollDirection,
-            description: a.description || `Execute ${a.type || 'action'}`,
-            status: 'pending',
-          }))
-        : [];
+      // "answer" isn't a DOM action -- surface answer_text as the chat
+      // response. Everything else shows its one-sentence reasoning so the
+      // user can see what the agent is about to do.
+      const answer = result.action === 'answer' && result.answer_text
+        ? result.answer_text
+        : result.reasoning;
 
       return {
         answer,
-        actions,
-        modelUsed: `Custom Backend (${this.config.modelName || 'Self-Hosted'})`,
+        action,
+        modelUsed: `Agent Server (${this.config.modelName})`,
         latencyMs,
-        tokensUsed: result.tokensUsed,
       };
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`Custom backend request timed out after ${timeoutMs / 1000}s`);
+        throw new Error(`Agent server request timed out after ${timeoutMs / 1000}s`);
       }
       throw err;
     }

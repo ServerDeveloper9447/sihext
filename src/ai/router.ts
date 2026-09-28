@@ -19,12 +19,12 @@ export class AIRouter {
     const mode: RoutingMode = settings.routingMode || 'auto';
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-    // 1. If offline, must use on-device ViT
+    // 1. If offline, must use on-device engine
     if (!isOnline) {
       return {
         target: 'on-device',
-        provider: 'local-vit',
-        reason: 'Device is offline; running purely in-browser on-device ViT engine.',
+        provider: 'local-yolo',
+        reason: 'Device is offline; running purely in-browser on-device engine.',
         confidence: 1.0,
       };
     }
@@ -33,7 +33,7 @@ export class AIRouter {
     if (mode === 'on-device-only') {
       return {
         target: 'on-device',
-        provider: 'local-vit',
+        provider: 'local-yolo',
         reason: 'Policy: Strict On-Device execution only (zero outbound network requests).',
         confidence: 1.0,
       };
@@ -43,7 +43,7 @@ export class AIRouter {
       return {
         target: 'backend',
         provider: 'custom-backend',
-        reason: 'Policy: Route directly to custom self-hosted model backend.',
+        reason: 'Policy: Route directly to agent server backend.',
         confidence: 1.0,
       };
     }
@@ -51,8 +51,8 @@ export class AIRouter {
     if (mode === 'on-device-preferred') {
       return {
         target: 'on-device',
-        provider: 'local-vit',
-        reason: 'Preference: On-Device ViT preferred.',
+        provider: 'local-yolo',
+        reason: 'Preference: On-Device engine preferred.',
         confidence: 0.85,
       };
     }
@@ -61,7 +61,7 @@ export class AIRouter {
       return {
         target: 'backend',
         provider: 'custom-backend',
-        reason: 'Preference: Custom model backend preferred.',
+        reason: 'Preference: Agent server backend preferred.',
         confidence: 0.85,
       };
     }
@@ -71,8 +71,8 @@ export class AIRouter {
     if (domSummary.sensitiveElementsCount > 0 && settings.privacy.enabled) {
       return {
         target: 'on-device',
-        provider: 'local-vit',
-        reason: `Privacy Guard: ${domSummary.sensitiveElementsCount} sensitive elements detected on page. Routing to on-device ViT to prevent external transmission.`,
+        provider: 'local-yolo',
+        reason: `Privacy Guard: ${domSummary.sensitiveElementsCount} sensitive elements detected on page. Routing to on-device engine to prevent external transmission.`,
         confidence: 0.9,
       };
     }
@@ -82,17 +82,17 @@ export class AIRouter {
     if (isSimpleNavigation && domSummary.interactiveCount < 60) {
       return {
         target: 'on-device',
-        provider: 'local-vit',
-        reason: 'Task is a lightweight DOM action suitable for instant on-device ViT execution.',
+        provider: 'local-yolo',
+        reason: 'Task is a lightweight DOM action suitable for instant on-device execution.',
         confidence: 0.8,
       };
     }
 
-    // Complex reasoning, visual page analysis, or deep questions route to our custom backend server
+    // Complex reasoning, visual page analysis, or deep questions route to the agent server backend
     return {
       target: 'backend',
       provider: 'custom-backend',
-      reason: 'Complex task or multi-step reasoning; routing to custom self-hosted model backend.',
+      reason: 'Complex task or multi-step reasoning; routing to agent server backend.',
       confidence: 0.88,
     };
   }

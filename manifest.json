@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Auxilium AI - Hybrid Vision & DOM Agent",
   "version": "1.0.0",
-  "description": "Privacy-first hybrid AI Chrome extension with Set-of-Mark annotation, on-device ViT, custom model backend, and automated PII redaction.",
+  "description": "Privacy-first hybrid AI Chrome extension with Set-of-Mark annotation, on-device YOLO, custom model backend, and automated PII redaction.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -10,6 +10,11 @@
     "storage",
     "sidePanel",
     "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://server-tau-nine-29.vercel.app/*"
   ],
   "action": {
     "default_popup": "popup.html",

@@ -14,6 +14,7 @@ import {
   FileText,
   MousePointer,
   HelpCircle,
+  Square,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -33,6 +34,8 @@ import {
 import { sendMessageToActiveTab, sendMessageToBackground } from '../utils/messaging';
 import { AgentCoordinator } from '../ai/coordinator';
 
+const MAX_AGENT_STEPS = 20;
+
 export const SidePanel: React.FC = () => {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -41,9 +44,13 @@ export const SidePanel: React.FC = () => {
   const [domSummary, setDomSummary] = useState<ExtractedDOMSummary | null>(null);
   const [activeTabUrl, setActiveTabUrl] = useState('');
   const [executingActionId, setExecutingActionId] = useState<string | null>(null);
+  const [runningTaskMessageId, setRunningTaskMessageId] = useState<string | null>(null);
 
   const coordinatorRef = useRef(new AgentCoordinator());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const backendTasksRef = useRef(new Map<string, string>());
+  const localEntityValuesRef = useRef(new Map<string, string>());
+  const cancelTaskRef = useRef(false);
 
   // Load initial settings and history
   useEffect(() => {
@@ -57,7 +64,7 @@ export const SidePanel: React.FC = () => {
           {
             id: 'welcome-msg',
             role: 'assistant',
-            content: `👋 **Welcome to Auxilium AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **On-Device ViT** or our **Self-Hosted Model Backend**.\n\n🛡️ **Privacy Shield is Active**: Passwords, sensitive form inputs, credit cards, and faces are automatically stripped before any data leaves your browser.`,
+            content: `👋 **Welcome to Auxilium AI Assistant!**\n\nI can analyze this webpage, answer questions, or execute actions on your behalf using **on-device YOLO** or our **Self-Hosted Model Backend**.\n\n🛡️ **Privacy Shield**: Recognized sensitive DOM fields are masked before backend requests when redaction is enabled. Face detection is not available yet.`,
             timestamp: Date.now(),
             modelUsed: "Auxilium System",
           },
@@ -68,6 +75,7 @@ export const SidePanel: React.FC = () => {
     refreshCurrentTabDOM();
 
     return () => {
+      cancelTaskRef.current = true;
       sendMessageToActiveTab({ type: "CLEANUP_OVERLAYS" }).catch(() => {});
     };
   }, []);
@@ -95,6 +103,37 @@ export const SidePanel: React.FC = () => {
     }
   };
 
+  const captureCurrentPageState = async (fallbackDOM?: ExtractedDOMSummary) => {
+    const domRes = await sendMessageToActiveTab<undefined, ExtractedDOMSummary>({
+      type: 'GET_PAGE_DOM',
+    });
+    const currentDOM = domRes.success && domRes.data ? domRes.data : fallbackDOM;
+    if (!currentDOM) {
+      throw new Error(domRes.error || 'Unable to read the active page DOM.');
+    }
+    setDomSummary(currentDOM);
+    setActiveTabUrl(currentDOM.url);
+
+    const valuesRes = await sendMessageToBackground<undefined, Record<string, string>>({
+      type: 'GET_ENTITY_VALUES',
+    });
+    if (valuesRes.success && valuesRes.data) {
+      for (const [label, value] of Object.entries(valuesRes.data)) {
+        localEntityValuesRef.current.set(label, value);
+      }
+    }
+
+    let screenshotUrl: string | undefined;
+    const screenshotRes = await sendMessageToBackground<undefined, string>({
+      type: 'CAPTURE_TAB',
+    });
+    if (screenshotRes.success && screenshotRes.data) {
+      screenshotUrl = screenshotRes.data;
+    }
+
+    return { dom: currentDOM, screenshotUrl };
+  };
+
   const handleSendMessage = async (queryText?: string) => {
     const textToSend = queryText || inputQuery;
     if (!textToSend.trim() || isLoading) return;
@@ -111,34 +150,13 @@ export const SidePanel: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // 1. Get latest DOM summary
-      let currentDOM = domSummary;
-      const domRes = await sendMessageToActiveTab<undefined, ExtractedDOMSummary>({
-        type: 'GET_PAGE_DOM',
-      });
-      if (domRes.success && domRes.data) {
-        currentDOM = domRes.data;
-        setDomSummary(currentDOM);
-      }
+      coordinatorRef.current.resetHistory();
+      backendTasksRef.current.clear();
+      localEntityValuesRef.current.clear();
+      await sendMessageToBackground({ type: 'START_NEW_TASK' });
+      const { dom: currentDOM, screenshotUrl } = await captureCurrentPageState(domSummary || undefined);
 
-      if (!currentDOM) {
-        throw new Error('Unable to access webpage DOM. Try reloading the active tab.');
-      }
-
-      // 2. Capture screenshot if cloud execution is possible
-      let screenshotUrl: string | undefined;
-      try {
-        const snapRes = await sendMessageToBackground<undefined, string>({
-          type: 'CAPTURE_TAB',
-        });
-        if (snapRes.success && snapRes.data) {
-          screenshotUrl = snapRes.data;
-        }
-      } catch {
-        // Screenshot fallback
-      }
-
-      // 3. Coordinate AI Execution turn (Router -> On-device ViT / Custom Backend + Privacy Redaction)
+      // 3. Coordinate AI execution (router -> on-device YOLO / backend + privacy redaction)
       const { message: agentReply } = await coordinatorRef.current.executeAgentTurn(
         textToSend,
         currentDOM,
@@ -146,9 +164,26 @@ export const SidePanel: React.FC = () => {
         screenshotUrl
       );
 
+      if (!agentReply.isLocalExecution) {
+        const firstAction = agentReply.actions?.[0];
+        if (firstAction && firstAction.type !== 'answer' && firstAction.type !== 'done') {
+          backendTasksRef.current.set(agentReply.id, textToSend);
+        } else {
+          coordinatorRef.current.resetHistory();
+          localEntityValuesRef.current.clear();
+          await sendMessageToBackground({ type: 'START_NEW_TASK' });
+        }
+      } else {
+        coordinatorRef.current.resetHistory();
+        localEntityValuesRef.current.clear();
+        await sendMessageToBackground({ type: 'START_NEW_TASK' });
+      }
       setMessages((prev) => [...prev, agentReply]);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
+      coordinatorRef.current.resetHistory();
+      localEntityValuesRef.current.clear();
+      await sendMessageToBackground({ type: 'START_NEW_TASK' });
       setMessages((prev) => [
         ...prev,
         {
@@ -165,59 +200,154 @@ export const SidePanel: React.FC = () => {
     }
   };
 
-  const handleExecuteAction = async (action: AgentAction, messageId: string) => {
+  const executeActionOnPage = async (
+    action: AgentAction
+  ): Promise<{ success: boolean; message?: string }> => {
+    let actionToExecute = action;
+    const token = action.value?.match(/^\[?([A-Za-z][A-Za-z0-9_]*-\d+)\]?$/)?.[1];
+    if (token) {
+      const localValue = localEntityValuesRef.current.get(token);
+      if (localValue === undefined) {
+        return { success: false, message: `No local value is available for placeholder "${token}".` };
+      }
+      actionToExecute = { ...action, value: localValue };
+    }
+
+    const response = await sendMessageToActiveTab<AgentAction, { success: boolean; message?: string }>({
+      type: 'EXECUTE_ACTION',
+      payload: actionToExecute,
+    });
+    return {
+      success: response.success && response.data?.success !== false,
+      message: response.data?.message || response.error,
+    };
+  };
+
+  const handleExecuteAction = async (
+    action: AgentAction,
+    messageId: string
+  ): Promise<{ success: boolean; message?: string }> => {
     setExecutingActionId(action.id);
 
+    let result: { success: boolean; message?: string };
     try {
-      const result = await sendMessageToActiveTab<AgentAction, { success: boolean; message?: string }>({
-        type: 'EXECUTE_ACTION',
-        payload: action,
-      });
-
-      // Update action status in message state
-      setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.id === messageId && msg.actions) {
-            return {
-              ...msg,
-              actions: msg.actions.map((a) =>
-                a.id === action.id
-                  ? {
-                      ...a,
-                      status: result.success ? 'completed' : 'failed',
-                      error: result.error || (result.data && !result.data.success ? result.data.message : undefined),
-                    }
-                  : a
-              ),
-            };
-          }
-          return msg;
-        })
-      );
+      result = await executeActionOnPage(action);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId && m.actions
-            ? {
-                ...m,
-                actions: m.actions.map((a) =>
-                  a.id === action.id ? { ...a, status: 'failed', error: msg } : a
-                ),
-              }
-            : m
-        )
-      );
+      result = { success: false, message: err instanceof Error ? err.message : String(err) };
+    }
+
+    if (backendTasksRef.current.has(messageId)) {
+      coordinatorRef.current.recordExecutionResult(action, result);
+    }
+    setMessages((prev) => prev.map((msg) => {
+      if (msg.id !== messageId || !msg.actions) return msg;
+      return {
+        ...msg,
+        actions: msg.actions.map((item) => item.id === action.id
+          ? { ...item, status: result.success ? 'completed' : 'failed', error: result.success ? undefined : result.message }
+          : item),
+      };
+    }));
+    setExecutingActionId(null);
+    return result;
+  };
+
+  const stopAgentTask = () => {
+    cancelTaskRef.current = true;
+  };
+
+  const runBackendTask = async (task: string, initialAction: AgentAction, messageId: string) => {
+    cancelTaskRef.current = false;
+    setRunningTaskMessageId(messageId);
+    setIsLoading(true);
+
+    let action = initialAction;
+    let executedSteps = 0;
+    const appendToMessage = (content: string, nextAction?: AgentAction) => {
+      setMessages((prev) => prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        return {
+          ...msg,
+          content: content ? `${msg.content}\n\n${content}` : msg.content,
+          actions: nextAction ? [...(msg.actions || []), nextAction] : msg.actions,
+        };
+      }));
+    };
+
+    try {
+      while (action && !cancelTaskRef.current) {
+        if (action.type === 'answer' || action.type === 'done') break;
+        if (action.status === 'pending') {
+          if (executedSteps >= MAX_AGENT_STEPS) {
+            appendToMessage(`Stopped at the ${MAX_AGENT_STEPS}-action safety limit.`);
+            break;
+          }
+          await handleExecuteAction(action, messageId);
+          executedSteps++;
+          if (cancelTaskRef.current) break;
+          if (executedSteps >= MAX_AGENT_STEPS) {
+            appendToMessage(`Stopped at the ${MAX_AGENT_STEPS}-action safety limit.`);
+            break;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, settings.actionExecutionDelayMs || 300));
+        const pageState = await captureCurrentPageState();
+        const nextTurn = await coordinatorRef.current.executeAgentTurn(
+          task,
+          pageState.dom,
+          { ...settings, routingMode: 'backend-only' },
+          pageState.screenshotUrl
+        );
+
+        if (cancelTaskRef.current) break;
+        if (nextTurn.routing.target !== 'backend') {
+          throw new Error('Backend routing is unavailable; the task stopped.');
+        }
+
+        const nextAction = nextTurn.message.actions?.[0];
+        if (!nextAction) {
+          appendToMessage(nextTurn.message.content || 'The backend returned no next action.');
+          break;
+        }
+
+        const isTerminal = nextAction.type === 'answer' || nextAction.type === 'done';
+        action = { ...nextAction, status: isTerminal ? 'completed' : nextAction.status };
+        appendToMessage(nextTurn.message.content, action);
+      }
+
+      if (cancelTaskRef.current) {
+        appendToMessage('Task stopped.');
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      appendToMessage(`Task stopped: ${errorMessage}`);
     } finally {
+      backendTasksRef.current.delete(messageId);
+      localEntityValuesRef.current.clear();
+      await sendMessageToBackground({ type: 'START_NEW_TASK' });
+      setRunningTaskMessageId(null);
       setExecutingActionId(null);
+      setIsLoading(false);
     }
   };
 
   const handleExecuteAllActions = async (actions: AgentAction[], messageId: string) => {
+    if (runningTaskMessageId === messageId) {
+      stopAgentTask();
+      return;
+    }
+
+    const task = backendTasksRef.current.get(messageId);
+    if (task && actions[0]) {
+      await runBackendTask(task, actions[0], messageId);
+      return;
+    }
+
     for (const act of actions) {
       if (act.status !== 'completed') {
         await handleExecuteAction(act, messageId);
-        await new Promise((r) => setTimeout(r, settings.actionExecutionDelayMs || 300));
+        await new Promise((resolve) => setTimeout(resolve, settings.actionExecutionDelayMs || 300));
       }
     }
   };
@@ -296,7 +426,7 @@ export const SidePanel: React.FC = () => {
                   <span className="font-medium text-sarvam-text">{msg.modelUsed || 'AI Assistant'}</span>
                   {msg.isLocalExecution ? (
                     <Badge variant="brand" size="sm" icon={<Cpu className="w-2.5 h-2.5" />}>
-                      On-Device ViT
+                      On-Device YOLO
                     </Badge>
                   ) : (
                     <Badge variant="neutral" size="sm" icon={<Server className="w-2.5 h-2.5" />}>
@@ -344,11 +474,19 @@ export const SidePanel: React.FC = () => {
                     </span>
                     <Button
                       size="sm"
-                      variant="primary"
-                      onClick={() => handleExecuteAllActions(msg.actions!, msg.id)}
-                      disabled={msg.actions.every((a) => a.status === 'completed')}
+                      variant={runningTaskMessageId === msg.id ? 'danger' : 'primary'}
+                      leftIcon={runningTaskMessageId === msg.id ? <Square className="w-3 h-3" /> : undefined}
+                      onClick={() => runningTaskMessageId === msg.id
+                        ? stopAgentTask()
+                        : handleExecuteAllActions(msg.actions!, msg.id)}
+                      disabled={runningTaskMessageId !== null && runningTaskMessageId !== msg.id
+                        || runningTaskMessageId !== msg.id
+                          && !backendTasksRef.current.has(msg.id)
+                          && msg.actions.every((a) => a.status === 'completed' || a.type === 'answer' || a.type === 'done')}
                     >
-                      Execute All
+                      {runningTaskMessageId === msg.id
+                        ? 'Stop Task'
+                        : backendTasksRef.current.has(msg.id) ? 'Run Task' : 'Execute All'}
                     </Button>
                   </div>
 
@@ -374,7 +512,7 @@ export const SidePanel: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {act.status === 'completed' ? (
+                          {act.status === 'completed' || act.type === 'answer' || act.type === 'done' ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                           ) : act.status === 'failed' ? (
                             <AlertTriangle className="w-4 h-4 text-rose-400" />
@@ -384,6 +522,7 @@ export const SidePanel: React.FC = () => {
                               variant="outline"
                               isLoading={executingActionId === act.id}
                               onClick={() => handleExecuteAction(act, msg.id)}
+                              disabled={runningTaskMessageId !== null}
                             >
                               Run
                             </Button>

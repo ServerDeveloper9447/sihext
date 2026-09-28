@@ -1,6 +1,6 @@
 # Auxilium AI — Hybrid Vision & DOM Agent
 
-A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **Vite**, **Tailwind CSS**, and **CRXJS**. It features an intelligent dual-engine architecture with **Set-of-Mark (SoM) DOM Annotation**, **Offscreen Canvas Redaction**, **On-Device ViT**, a **Self-Hosted Model Backend**, and rich **React + Tailwind UI** interfaces.
+A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **Vite**, **Tailwind CSS**, and **CRXJS**. It features **Set-of-Mark (SoM) DOM Annotation**, **Offscreen Canvas Redaction**, on-device YOLO, a **Self-Hosted Model Backend**, and **React + Tailwind UI** interfaces.
 
 ---
 
@@ -10,12 +10,12 @@ A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **
    - Automatically scans all visible interactive DOM elements (`button`, `a`, `input`, `select`, etc.).
    - Assigns unique integer IDs (`1`, `2`, `3`...) and injects high-contrast semi-transparent overlay boxes with bold ID badges.
 
-2. 🛡️ **DOM PII & Visual Face Redaction**:
+2. 🛡️ **DOM PII Redaction**:
    - **DOM PII Discovery**: Locates sensitive inputs (`type="password"`, `autocomplete*="cc-"`, credit cards, SSN, PINs, CVVs) and extracts exact bounding coordinates.
-   - **Offscreen Canvas Redaction**: Dedicated offscreen document applies blackout masks over DOM PII boxes and detected faces via a WebGPU ML placeholder (`detectVisualPII`).
+   - **Offscreen Canvas Redaction**: Dedicated offscreen document applies blackout masks over detected sensitive DOM regions in screenshots.
 
 3. ⚡ **Zero Corporate Models / Self-Hosted Backend**:
-   - **On-Device ViT**: In-browser local reasoning for instantaneous actions without outbound network requests.
+   - **On-Device YOLO**: Handles webpage actions locally without outbound network requests.
    - **Custom Model Backend**: Flexible client for your self-hosted FastAPI / vLLM / private model cluster with live health/ping checking.
 
 4. 💻 **Full-Featured User Interfaces**:
@@ -33,7 +33,7 @@ A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **
 ├── tailwind.config.js         # Tailwind CSS styling configuration
 │
 ├── background.js              # Service Worker orchestrating the 7-step agent loop
-├── offscreen.html & .js       # Offscreen document: Canvas blackout redaction & WebGPU ML placeholder
+├── offscreen.html & .js       # Offscreen document: Canvas screenshot redaction
 ├── content.js & content.css   # Content script: Set-of-Mark ID overlays, PII detection & action execution
 ├── popup.html                 # Toolbar popup HTML entry point (mounts React popup)
 ├── sidepanel.html             # HTML entry point for the Side Panel agent workspace
@@ -44,7 +44,7 @@ A modern Chrome Extension (Manifest V3) built with **React**, **TypeScript**, **
 │   └── generate-icons.js      # Script to generate crisp PNG icon assets
 │
 └── src/                       # React + TypeScript Core Application
-    ├── ai/                    # Custom backend client, router, on-device ViT & turn coordinator
+      ├── ai/                    # Custom backend client, router, on-device YOLO engine & turn coordinator
     ├── components/            # Reusable UI library (Button, Card, Toggle, Badge, Header)
     ├── content/               # Modular DOM extractor, action executor, and highlighter
     ├── privacy/               # Canvas redactor, DOM sanitizer, entity label manager and text PII scrubber

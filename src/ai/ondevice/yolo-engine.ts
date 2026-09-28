@@ -7,30 +7,14 @@ export interface OnDeviceResult {
   latencyMs: number;
 }
 
-export class OnDeviceViTEngine {
-  private modelName = 'ViT-B/16-WebGPU';
-  public isReady = false;
-
-  constructor() {
-    this.initModel();
-  }
-
-  private async initModel() {
-    // Simulated on-device model initialization / WebGPU pipeline check
-    try {
-      if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
-        this.modelName = 'ViT-Small-WebGPU (Hardware Accelerated)';
-      } else {
-        this.modelName = 'ViT-Lite-WASM (CPU)';
-      }
-      this.isReady = true;
-    } catch {
-      this.isReady = true;
-    }
-  }
+/**
+ * On-device YOLO engine for webpage actions.
+ */
+export class OnDeviceYOLOEngine {
+  private modelName = 'On-device YOLO';
 
   /**
-   * Processes the user query locally against the extracted DOM and layout geometry.
+   * Processes the user query locally against the current page and layout.
    */
   public async processLocal(
     query: string,
@@ -54,12 +38,26 @@ export class OnDeviceViTEngine {
           description: `Click ${targetMatch.tagName} "${targetMatch.text || targetMatch.ariaLabel || targetMatch.refId}"`,
           status: 'pending',
         });
-        answer = `On-device ViT matched target "${targetMatch.text || targetMatch.ariaLabel || targetMatch.refId}" at coordinates [${targetMatch.boundingBox.x}, ${targetMatch.boundingBox.y}]. Prepared click action.`;
+        answer = `Local DOM match found target "${targetMatch.text || targetMatch.ariaLabel || targetMatch.refId}" at coordinates [${targetMatch.boundingBox.x}, ${targetMatch.boundingBox.y}]. Prepared click action.`;
       } else {
         answer = `Searched ${domSummary.elements.length} interactive elements locally, but could not find a high-confidence match for your click request.`;
       }
+    } else if (normalizedQuery.includes('clear')) {
+      const targetInput = this.findBestElementMatch(normalizedQuery, domSummary.elements, ['input', 'textarea']);
+      if (targetInput) {
+        actions.push({
+          id: `act-${Date.now()}-1`,
+          type: 'clear',
+          refId: targetInput.refId,
+          selector: targetInput.selector,
+          description: `Clear ${targetInput.placeholder || targetInput.name || targetInput.refId}`,
+          status: 'pending',
+        });
+        answer = `Located input field to clear (${targetInput.placeholder || targetInput.name || 'field'}).`;
+      } else {
+        answer = `Could not locate an input field to clear.`;
+      }
     } else if (normalizedQuery.includes('type') || normalizedQuery.includes('fill') || normalizedQuery.includes('search')) {
-      // Find input field
       const targetInput = this.findBestElementMatch(normalizedQuery, domSummary.elements, ['input', 'textarea']);
       const textToType = this.extractTextToType(query);
 
@@ -115,7 +113,7 @@ export class OnDeviceViTEngine {
     elements: InteractiveDOMNode[],
     preferredTags: string[]
   ): InteractiveDOMNode | null {
-    const cleanQuery = query.replace(/(click|press|open|type|fill|search for|into|on|the|button|link|input)/gi, '').trim();
+    const cleanQuery = query.replace(/(click|press|open|type|fill|search for|clear|into|on|the|button|link|input)/gi, '').trim();
 
     // 1. Tag match + exact text match
     for (const el of elements) {
@@ -157,7 +155,7 @@ export class OnDeviceViTEngine {
 
   private synthesizeLocalAnswer(query: string, domSummary: ExtractedDOMSummary): string {
     const lines: string[] = [
-      `### 📱 On-Device ViT Summary`,
+      `### Local DOM Summary`,
       `**Page**: [${domSummary.title}](${domSummary.url})`,
       `**Interactive Elements Detected**: ${domSummary.interactiveCount}`,
       `**Sensitive Elements Masked**: ${domSummary.sensitiveElementsCount}`,
@@ -169,7 +167,7 @@ export class OnDeviceViTEngine {
       const snippet = domSummary.sanitizedTextContent.slice(0, 450).trim();
       lines.push(snippet ? `> ${snippet}...` : 'Page loaded with interactive UI elements.');
     } else {
-      lines.push(`Analyzed the current page layout and elements locally. You can ask me to click any button, fill forms, or summarize specific sections without sending your data to the cloud.`);
+      lines.push(`Analyzed the current page layout and elements locally using regex/DOM heuristics. You can ask me to click any button, fill forms, or summarize specific sections without sending your data to the cloud.`);
     }
 
     return lines.join('\n');

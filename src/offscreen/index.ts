@@ -9,8 +9,12 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (res: ExtensionResponse) => void
   ) => {
     if (message.type === 'REDACT_IMAGE') {
-      const payload = message.payload as { dataUrl: string; regions: RedactionRegion[] };
-      CanvasRedactor.redactScreenshot(payload.dataUrl, payload.regions)
+      const payload = message.payload as {
+        dataUrl: string;
+        regions: RedactionRegion[];
+        viewport: { width: number; height: number };
+      };
+      CanvasRedactor.redactScreenshot(payload.dataUrl, payload.regions, payload.viewport)
         .then((redactedUrl) => {
           sendResponse({ success: true, data: redactedUrl });
         })

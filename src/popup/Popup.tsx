@@ -211,7 +211,7 @@ export const Popup: React.FC = () => {
             </span>
           </div>
           <Badge variant="brand" size="sm">
-            {settings?.selectedProvider === 'local-vit' ? 'ON-DEVICE ViT' : 'CUSTOM BACKEND'}
+            {settings?.selectedProvider === 'local-yolo' ? 'ON-DEVICE YOLO' : 'CUSTOM BACKEND'}
           </Badge>
         </div>
       </div>

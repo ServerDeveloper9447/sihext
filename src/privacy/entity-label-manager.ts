@@ -5,6 +5,7 @@ export interface EntityMeta {
 
 export class EntityLabelManager {
   private hashToLabel = new Map<string, string>();
+  private labelToValue = new Map<string, string>();
   private entityMap = new Map<string, EntityMeta>();
   private counters: Record<string, number> = {};
 
@@ -25,6 +26,7 @@ export class EntityLabelManager {
       label = this.nextLabel(type);
       this.hashToLabel.set(key, label);
     }
+    this.labelToValue.set(label, value);
     this.entityMap.set(label, { type, bboxRefs: [ref] });
     return label;
   }
@@ -44,8 +46,13 @@ export class EntityLabelManager {
     return this.entityMap;
   }
 
+  public getValues(): Record<string, string> {
+    return Object.fromEntries(this.labelToValue);
+  }
+
   public reset() {
     this.hashToLabel.clear();
+    this.labelToValue.clear();
     this.entityMap.clear();
     this.counters = {};
   }

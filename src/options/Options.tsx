@@ -353,15 +353,11 @@ export const Options: React.FC = () => {
                   />
 
                   <Toggle
-                    checked={settings.privacy?.maskFaces}
-                    onChange={(checked) =>
-                      setSettings((prev) => ({
-                        ...prev,
-                        privacy: { ...prev.privacy, maskFaces: checked },
-                      }))
-                    }
-                    label="Blur & Mask Human Faces on Screenshots"
-                    description="Pixelates and draws blackout blocks over detected face bounding boxes on captured tab screenshots"
+                    checked={false}
+                    onChange={() => undefined}
+                    disabled
+                    label="Face Redaction (Unavailable)"
+                    description="Face detection is not implemented; screenshot redaction currently covers recognized sensitive DOM fields."
                   />
                 </div>
               </Card>
@@ -418,7 +414,7 @@ export const Options: React.FC = () => {
                   <Cpu className="w-4 h-4 text-sarvam-indigo" /> Hybrid AI Routing Strategy
                 </h2>
                 <p className="text-xs text-sarvam-secondary">
-                  Choose how requests are balanced between local on-device ViT and your self-hosted model backend.
+                  Choose how requests are balanced between on-device YOLO and your self-hosted model backend.
                 </p>
 
                 <div className="space-y-3">
@@ -426,12 +422,12 @@ export const Options: React.FC = () => {
                     {
                       mode: 'auto',
                       title: 'Auto Balanced (Recommended)',
-                      desc: 'Uses on-device ViT for sensitive forms and fast DOM actions; routes multi-step reasoning to your custom backend.',
+                      desc: 'Uses on-device YOLO for straightforward actions; routes complex reasoning to your custom backend.',
                     },
                     {
                       mode: 'on-device-preferred',
                       title: 'On-Device Preferred',
-                      desc: 'Prefers on-device ViT / WebGPU; falls back to custom backend only when on-device confidence is low.',
+                      desc: 'Prefers on-device YOLO for webpage actions.',
                     },
                     {
                       mode: 'on-device-only',

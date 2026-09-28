@@ -97,6 +97,9 @@ async function handleBackgroundMessage(
       return { success: true, data: { label } };
     }
 
+    case 'GET_ENTITY_VALUES':
+      return { success: true, data: entityLabelManager.getValues() };
+
     case 'START_NEW_TASK': {
       entityLabelManager.reset();
       return { success: true };
