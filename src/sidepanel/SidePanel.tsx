@@ -15,6 +15,7 @@ import {
   MousePointer,
   HelpCircle,
   Square,
+  Maximize2,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -51,6 +52,25 @@ export const SidePanel: React.FC = () => {
   const backendTasksRef = useRef(new Map<string, string>());
   const localEntityValuesRef = useRef(new Map<string, string>());
   const cancelTaskRef = useRef(false);
+
+  const openScreenshotViewer = (src: string, title: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const storageKey = `sihext_screenshot_preview_${id}`;
+    chrome.storage.local.set({ [storageKey]: { src, title } }, () => {
+      if (chrome.runtime.lastError) return;
+      const viewerUrl = new URL(chrome.runtime.getURL('screenshot.html'));
+      viewerUrl.searchParams.set('id', id);
+      chrome.windows.create({
+        url: viewerUrl.toString(),
+        type: 'popup',
+        width: 1200,
+        height: 850,
+        focused: true,
+      }, () => {
+        if (chrome.runtime.lastError) chrome.storage.local.remove(storageKey);
+      });
+    });
+  };
 
   // Load initial settings and history
   useEffect(() => {
@@ -163,6 +183,9 @@ export const SidePanel: React.FC = () => {
         settings,
         screenshotUrl
       );
+      const hasLocalValueTokens = agentReply.isLocalExecution && (agentReply.actions || []).some((action) =>
+        /^\[?[A-Za-z][A-Za-z0-9_]*-\d+\]?$/.test(action.value || '')
+      );
 
       if (!agentReply.isLocalExecution) {
         const firstAction = agentReply.actions?.[0];
@@ -173,7 +196,7 @@ export const SidePanel: React.FC = () => {
           localEntityValuesRef.current.clear();
           await sendMessageToBackground({ type: 'START_NEW_TASK' });
         }
-      } else {
+      } else if (!hasLocalValueTokens) {
         coordinatorRef.current.resetHistory();
         localEntityValuesRef.current.clear();
         await sendMessageToBackground({ type: 'START_NEW_TASK' });
@@ -201,7 +224,8 @@ export const SidePanel: React.FC = () => {
   };
 
   const executeActionOnPage = async (
-    action: AgentAction
+    action: AgentAction,
+    backendAction = false
   ): Promise<{ success: boolean; message?: string }> => {
     let actionToExecute = action;
     const token = action.value?.match(/^\[?([A-Za-z][A-Za-z0-9_]*-\d+)\]?$/)?.[1];
@@ -211,6 +235,12 @@ export const SidePanel: React.FC = () => {
         return { success: false, message: `No local value is available for placeholder "${token}".` };
       }
       actionToExecute = { ...action, value: localValue };
+    } else if (backendAction && action.type === 'type' && action.refId && action.value) {
+      const targetRef = action.refId.startsWith('sihext-') ? action.refId : `sihext-${action.refId}`;
+      const target = domSummary?.elements.find((element) => element.refId === targetRef);
+      if (target?.isSensitive) {
+        return { success: false, message: 'Backend must use a local value token for sensitive fields.' };
+      }
     }
 
     const response = await sendMessageToActiveTab<AgentAction, { success: boolean; message?: string }>({
@@ -231,7 +261,7 @@ export const SidePanel: React.FC = () => {
 
     let result: { success: boolean; message?: string };
     try {
-      result = await executeActionOnPage(action);
+      result = await executeActionOnPage(action, backendTasksRef.current.has(messageId));
     } catch (err: unknown) {
       result = { success: false, message: err instanceof Error ? err.message : String(err) };
     }
@@ -350,6 +380,9 @@ export const SidePanel: React.FC = () => {
         await new Promise((resolve) => setTimeout(resolve, settings.actionExecutionDelayMs || 300));
       }
     }
+    coordinatorRef.current.resetHistory();
+    localEntityValuesRef.current.clear();
+    await sendMessageToBackground({ type: 'START_NEW_TASK' });
   };
 
   const handleHighlightElement = (refId?: string) => {
@@ -462,6 +495,31 @@ export const SidePanel: React.FC = () => {
                   </div>
                   <span className="text-[10px] text-emerald-400 font-mono tracking-wide">Shielded</span>
                 </div>
+              )}
+
+              {msg.screenshotPreview && (
+                <details className="mt-3 overflow-hidden rounded-lg border border-sarvam-border bg-sarvam-bg/70">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-emerald-300">
+                    View privacy-redacted screenshot
+                  </summary>
+                  <img
+                    src={msg.screenshotPreview}
+                    alt={`Privacy-redacted screenshot of ${msg.pageContext?.title || 'the active webpage'}`}
+                    loading="lazy"
+                    className="block max-h-96 w-full border-t border-sarvam-border object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openScreenshotViewer(
+                      msg.screenshotPreview!,
+                      msg.pageContext?.title || 'Active webpage'
+                    )}
+                    className="flex w-full items-center justify-center gap-1.5 border-t border-sarvam-border px-3 py-2 text-xs text-sarvam-secondary hover:bg-sarvam-card hover:text-white"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                    Enlarge screenshot
+                  </button>
+                </details>
               )}
 
               {/* Action Plan Card */}

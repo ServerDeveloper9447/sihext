@@ -67,8 +67,15 @@ export class DOMExtractor {
       'textarea',
       '[role="button"]',
       '[role="link"]',
+      '[role="textbox"]',
+      '[role="searchbox"]',
+      '[role="combobox"]',
+      '[role="spinbutton"]',
       '[role="checkbox"]',
+      '[role="radio"]',
+      '[role="listbox"]',
       '[role="switch"]',
+      '[role="slider"]',
       '[role="menuitem"]',
       '[role="tab"]',
       '[tabindex]:not([tabindex="-1"])',
@@ -96,8 +103,12 @@ export class DOMExtractor {
 
       const rect = el.getBoundingClientRect();
       const tagName = el.tagName.toLowerCase();
-      const isInput = ['input', 'select', 'textarea'].includes(tagName);
-      const isClickable = ['button', 'a'].includes(tagName) || el.getAttribute('role') === 'button' || el.hasAttribute('onclick');
+      const role = el.getAttribute('role') || '';
+      const isInput = ['input', 'select', 'textarea'].includes(tagName) ||
+        ['textbox', 'searchbox', 'combobox', 'spinbutton'].includes(role);
+      const isClickable = ['button', 'a'].includes(tagName) ||
+        ['button', 'radio', 'checkbox', 'switch', 'tab', 'menuitem'].includes(role) ||
+        el.hasAttribute('onclick');
 
       // value/placeholder must be extracted BEFORE classification, since
       // getElementPiiType needs the current value to run its content-regex fallback.
@@ -111,12 +122,20 @@ export class DOMExtractor {
         }
       }
 
+      const labelledBy = (el.getAttribute('aria-labelledby') || '')
+        .split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent || '')
+        .join(' ')
+        .trim();
+      const associatedLabels = el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement
+        ? Array.from(el.labels || []).map((label) => label.textContent || '').join(' ').trim()
+        : '';
+      const questionLabel = el.closest('[role="listitem"]')
+        ?.querySelector('[role="heading"]')?.textContent?.trim();
+      const fieldLabel = associatedLabels || labelledBy || el.getAttribute('aria-label') || questionLabel || undefined;
+
       const piiType = this.sanitizer.getElementPiiType(el, value);
       const isSensitive = piiType !== null;
-
-      if (isSensitive) {
-        sensitiveElementsCount++;
-      }
 
       if (shouldInject && this.overlayContainer && (isClickable || isInput)) {
         const overlay = document.createElement('div');
@@ -149,7 +168,12 @@ export class DOMExtractor {
         className: typeof el.className === 'string' ? el.className.split(' ').slice(0, 3).join(' ') : undefined,
         role: el.getAttribute('role') || undefined,
         ariaLabel: el.getAttribute('aria-label') || undefined,
+        label: fieldLabel,
         name: el.getAttribute('name') || undefined,
+        autocomplete: el.getAttribute('autocomplete') || undefined,
+        required: el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement
+          ? el.required
+          : el.getAttribute('aria-required') === 'true',
         placeholder,
         value,
         text: text || undefined,
@@ -168,14 +192,19 @@ export class DOMExtractor {
           right: Math.round(rect.right),
           bottom: Math.round(rect.bottom),
         },
+        sensitiveBoundingBoxes: (await this.getSensitiveTextRegions(el)).map((region) => region.boundingBox),
         selector: this.generateCSSSelector(el),
       };
 
       const sanitizedNode = await this.sanitizer.sanitizeNode(rawNode);
+      if (sanitizedNode.isSensitive) {
+        sensitiveElementsCount++;
+      }
       elements.push(sanitizedNode);
     }
 
     const bodyText = (document.body.innerText || '').slice(0, 3000);
+    const sensitiveTextRegions = await this.getSensitiveTextRegions(document.body);
 
     return {
       title: document.title,
@@ -187,6 +216,7 @@ export class DOMExtractor {
       elements,
       interactiveCount: elements.length,
       sensitiveElementsCount,
+      sensitiveTextRegions,
       sanitizedTextContent: bodyText,
     };
   }
@@ -209,6 +239,47 @@ export class DOMExtractor {
     }
 
     return true;
+  }
+
+  private async getSensitiveTextRegions(element: Element): Promise<Array<{
+    boundingBox: InteractiveDOMNode['boundingBox'];
+    piiType: string;
+    valueToken: string;
+  }>> {
+    const regions: Array<{ boundingBox: InteractiveDOMNode['boundingBox']; piiType: string; valueToken: string }> = [];
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+
+    while (textNode) {
+      const text = textNode.textContent || '';
+      for (const match of this.sanitizer.findSensitiveTextRanges(text)) {
+        const range = document.createRange();
+        range.setStart(textNode, match.start);
+        range.setEnd(textNode, match.end);
+        const valueToken = await this.sanitizer.getSensitiveValueToken(match.piiType, match.value);
+
+        for (const rect of Array.from(range.getClientRects())) {
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          regions.push({
+            boundingBox: {
+              x: Math.round(rect.x),
+              y: Math.round(rect.y),
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+              top: Math.round(rect.top),
+              left: Math.round(rect.left),
+              right: Math.round(rect.right),
+              bottom: Math.round(rect.bottom),
+            },
+            piiType: match.piiType,
+            valueToken,
+          });
+        }
+      }
+      textNode = walker.nextNode();
+    }
+
+    return regions;
   }
 
   private generateCSSSelector(el: Element): string {

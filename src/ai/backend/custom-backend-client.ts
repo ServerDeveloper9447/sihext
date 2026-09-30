@@ -101,15 +101,45 @@ export class CustomBackendClient {
     }
 
     // Matches SanitizedRequestSchema in schemas.py exactly.
+    const pageUrl = new URL(domSummary.url);
+    const pageContext = [
+      `Page: ${domSummary.title}`,
+      `Site: ${pageUrl.origin}`,
+      `Viewport: ${domSummary.viewport.width}x${domSummary.viewport.height}`,
+      `Interactive elements: ${domSummary.interactiveCount}; sensitive fields: ${domSummary.sensitiveElementsCount}`,
+    ].join('\n');
+    const availableValueTokens = new Map<string, string>();
+    for (const region of domSummary.sensitiveTextRegions || []) {
+      availableValueTokens.set(region.valueToken, region.piiType);
+    }
+    for (const element of domSummary.elements) {
+      if (!element.isSensitive || !element.piiType) continue;
+      for (const source of [element.value, element.text]) {
+        const valueToken = source?.match(/^\[([A-Za-z][A-Za-z0-9_]*-\d+)\]$/)?.[1];
+        if (valueToken) availableValueTokens.set(valueToken, element.piiType);
+      }
+    }
+    const localValueTokens = Array.from(availableValueTokens.entries())
+      .map(([valueToken, piiType]) => `${piiType}=[${valueToken}]`);
+    const pageValueContext = localValueTokens.length > 0
+      ? `Detected page values (local-only tokens; use the exact token as the action value): ${localValueTokens.join(', ')}`
+      : 'No detected page-value tokens are available.';
     const payload = {
-      task,
+      task: `${pageContext}\n${pageValueContext}\n\nUser request: ${task}`,
       screenshot: redactedScreenshotUrl || null,
       dom: {
         elements: domSummary.elements.slice(0, 120).map((el) => ({
           element_id: Number(el.refId.replace(/^sihext-/, '')),
           tag: el.tagName,
-          label: (el.value || el.text || el.ariaLabel || el.placeholder || el.name || '')
-            .replace(/^\[([^\]]+)\]$/, '$1'),
+          label: [
+            el.label || el.value || el.text || el.ariaLabel || el.placeholder || el.name || '',
+            el.name ? `name=${el.name}` : '',
+            el.type ? `type=${el.type}` : '',
+            el.role ? `role=${el.role}` : '',
+            el.autocomplete ? `autocomplete=${el.autocomplete}` : '',
+            el.required ? 'required' : '',
+            el.isSensitive ? `sensitive=${el.piiType || 'true'}` : '',
+          ].filter(Boolean).join(' | ').replace(/^\[([^\]]+)\]$/, '$1').slice(0, 500),
         })),
       },
       history,

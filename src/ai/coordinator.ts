@@ -24,6 +24,18 @@ function extractLabel(sanitizedValue: string | undefined, sanitizedText: string 
   return match ? match[1] : (fallbackType ? `${fallbackType}-1` : 'field-1');
 }
 
+function formatPiiType(piiType: string): string {
+  const labels: Record<string, string> = {
+    card_number: 'Card',
+    aadhaar: 'Aadhaar',
+    pan: 'PAN',
+    pincode_in: 'Postal code',
+    ssn: 'SSN',
+    dob: 'Date of birth',
+  };
+  return labels[piiType] || piiType.replace(/_/g, ' ');
+}
+
 export class AgentCoordinator {
   private yoloEngine = new OnDeviceYOLOEngine();
 
@@ -70,6 +82,45 @@ export class AgentCoordinator {
       redactedLabels: domSummary.sensitiveElementsCount > 0 ? ['Sensitive Input/Password'] : [],
     };
 
+    if (rawScreenshotUrl && settings.privacy.enabled) {
+      const sensitiveRegions: RedactionRegion[] = domSummary.elements
+        .filter((el) => el.isSensitive)
+        .flatMap((el) => {
+          const piiType = el.piiType ?? '';
+          const redactionStyle: 'blur' | 'blackout' = BLACKOUT_PII_TYPES.has(piiType)
+            ? 'blackout'
+            : BLUR_PII_TYPES.has(piiType)
+            ? 'blur'
+            : 'blackout';
+          const boxes = el.sensitiveBoundingBoxes?.length
+            ? el.sensitiveBoundingBoxes
+            : el.isInput
+            ? [el.boundingBox]
+            : [];
+          return boxes.map((box) => ({
+            box,
+            label: extractLabel(el.value, el.text, el.piiType),
+            redactionStyle,
+          }));
+        });
+      const seenBoxes = new Set(sensitiveRegions.map(({ box }) =>
+        `${box.x}:${box.y}:${box.width}:${box.height}`
+      ));
+      for (const region of domSummary.sensitiveTextRegions || []) {
+        const { boundingBox: box, piiType } = region;
+        const key = `${box.x}:${box.y}:${box.width}:${box.height}`;
+        if (seenBoxes.has(key)) continue;
+        seenBoxes.add(key);
+        sensitiveRegions.push({ box, label: formatPiiType(piiType), redactionStyle: 'blackout' });
+      }
+
+      redactedScreenshot = await CanvasRedactor.redactScreenshot(
+        rawScreenshotUrl,
+        sensitiveRegions,
+        domSummary.viewport
+      );
+    }
+
     if (routing.target === 'on-device') {
       const localRes = await this.yoloEngine.processLocal(prompt, domSummary);
       answer = localRes.answer;
@@ -77,32 +128,6 @@ export class AgentCoordinator {
       modelUsed = localRes.modelUsed;
       isLocalExecution = true;
     } else {
-      if (rawScreenshotUrl && settings.privacy.enabled) {
-        const sensitiveRegions: RedactionRegion[] = domSummary.elements
-          .filter((el) => el.isSensitive)
-          .map((el) => {
-            const piiType = el.piiType ?? '';
-            const redactionStyle: 'blur' | 'blackout' = BLACKOUT_PII_TYPES.has(piiType)
-              ? 'blackout'
-              : BLUR_PII_TYPES.has(piiType)
-              ? 'blur'
-              : 'blackout'; // text-field PII also gets a full blackout + label, not a blur
-            return {
-              box: el.boundingBox,
-              label: extractLabel(el.value, el.text, el.piiType),
-              redactionStyle,
-            };
-          });
-
-        redactedScreenshot = await CanvasRedactor.redactScreenshot(
-          rawScreenshotUrl,
-          sensitiveRegions,
-          domSummary.viewport
-        );
-      } else {
-        redactedScreenshot = rawScreenshotUrl;
-      }
-
       const backendClient = new CustomBackendClient(settings.backend);
       const backendRes = await backendClient.generateAgentResponse(
         prompt,
@@ -126,7 +151,7 @@ export class AgentCoordinator {
       isLocalExecution,
       redactionReport,
       actions,
-      screenshotPreview: redactedScreenshot,
+      screenshotPreview: settings.privacy.enabled ? redactedScreenshot : undefined,
       pageContext: {
         title: domSummary.title,
         url: domSummary.url,

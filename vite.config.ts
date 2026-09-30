@@ -25,6 +25,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         offscreen: 'offscreen.html',
+        screenshot: 'screenshot.html',
       },
     },
   },

@@ -28,7 +28,10 @@ export interface InteractiveDOMNode {
   className?: string;
   role?: string;
   ariaLabel?: string;
+  label?: string;
   name?: string;
+  autocomplete?: string;
+  required?: boolean;
   placeholder?: string;
   value?: string;
   text?: string;
@@ -38,6 +41,7 @@ export interface InteractiveDOMNode {
   isInput: boolean;
   isSensitive: boolean;
   boundingBox: BoundingBox;
+  sensitiveBoundingBoxes?: BoundingBox[];
   selector: string;
   childrenCount?: number;
 }
@@ -49,6 +53,7 @@ export interface ExtractedDOMSummary {
   elements: InteractiveDOMNode[];
   interactiveCount: number;
   sensitiveElementsCount: number;
+  sensitiveTextRegions?: Array<{ boundingBox: BoundingBox; piiType: string; valueToken: string }>;
   sanitizedTextContent: string;
 }
 
